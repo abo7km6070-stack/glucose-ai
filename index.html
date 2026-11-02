@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Preventive Glucose AI</title>
+<meta name="description" content="توقّع منحنى السكر قبل اللقمة الأولى — أداة وقائية للمجتمع السعودي">
+<meta name="theme-color" content="#11302C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one column clinical notebook — sticky tab bar, cards only where a step needs to stand apart, curve chart as the hero of the meal view */
+:root{
+  --bg:#F2F5F3; --surface:#FFFFFF; --ink:#11302C; --muted:#52675F; --line:#D6E0DB;
+  --accent:#C98B12; --accent-ink:#5A3D00; --accent-soft:#F6E9C8;
+  --ok:#23845A; --ok-soft:#DDF1E6; --warn:#B7790B; --warn-soft:#FBEFD2; --bad:#C0392B; --bad-soft:#F8DEDA;
+  --curve:#11302C; --curve2:#23845A; --band:rgba(17,48,44,.10);
+  --f-display:"Readex Pro","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Arabic",system-ui,"Segoe UI",Tahoma,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1716; --surface:#16211F; --ink:#E4EEEA; --muted:#93A8A0; --line:#2A3A37;
+  --accent:#E3A93A; --accent-ink:#FFE7B3; --accent-soft:#3A2E14;
+  --ok:#4CC28B; --ok-soft:#163327; --warn:#E3A93A; --warn-soft:#3A2E14; --bad:#F07565; --bad-soft:#3D1F1B;
+  --curve:#E4EEEA; --curve2:#4CC28B; --band:rgba(228,238,234,.12); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1716; --surface:#16211F; --ink:#E4EEEA; --muted:#93A8A0; --line:#2A3A37;
+  --accent:#E3A93A; --accent-ink:#FFE7B3; --accent-soft:#3A2E14;
+  --ok:#4CC28B; --ok-soft:#163327; --warn:#E3A93A; --warn-soft:#3A2E14; --bad:#F07565; --bad-soft:#3D1F1B;
+  --curve:#E4EEEA; --curve2:#4CC28B; --band:rgba(228,238,234,.12); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.65;direction:rtl}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.3}
+h1{font-size:1.5rem} h2{font-size:1.3rem} h3{font-size:1.05rem}
+p{margin:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+a{color:var(--accent-ink)} @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) a{color:var(--accent)}} :root[data-theme="dark"] a{color:var(--accent)}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 0;display:flex;flex-direction:column;gap:8px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand b{font-family:var(--f-display);font-size:1.15rem}
+.brand span{color:var(--muted);font-size:.85rem}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+nav.tabs a{padding:8px 12px 10px;text-decoration:none;color:var(--muted);font-weight:500;white-space:nowrap;border-bottom:3px solid transparent;font-size:.95rem}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+main{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px;display:flex;flex-direction:column;gap:20px}
+section.view{display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.lead{color:var(--muted);max-width:62ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.9rem;color:var(--muted);min-width:0}
+label.f > span{font-weight:500}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0;width:100%}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0;display:flex;flex-wrap:wrap;gap:8px 14px;min-width:0}
+legend{font-weight:600;font-size:.9rem;padding:0 4px}
+.chk{display:flex;align-items:center;gap:6px;font-size:.92rem;color:var(--ink)}
+.chk input{width:auto}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px;font-weight:500}
+button.primary{background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
+button.accent{background:var(--accent);color:#1d1400;border-color:var(--accent);font-weight:600}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.ghost{background:transparent}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{padding:7px 12px;font-size:.92rem}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.82rem;font-weight:600;background:var(--accent-soft);color:var(--ink)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.example{border:1px dashed var(--accent);background:var(--accent-soft);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:.9rem}
+.alert{border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:.95rem}
+.alert.bad{background:var(--bad-soft);border:1px solid var(--bad)} .alert.warn{background:var(--warn-soft);border:1px solid var(--warn)} .alert.ok{background:var(--ok-soft);border:1px solid var(--ok)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.step{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.step .st{font-size:.8rem;font-weight:600}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.kv div{display:flex;flex-direction:column;gap:2px}
+.kv small{color:var(--muted);font-size:.8rem;letter-spacing:.02em}
+.kv b{font-family:var(--f-num);font-size:1.25rem;unicode-bidi:plaintext;text-align:right}
+.chart{width:100%;overflow-x:auto}
+.chart svg{display:block;width:100%;height:auto;min-width:320px}
+.items{display:flex;flex-direction:column;gap:8px}
+.item{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
+.item .nm{font-weight:600}
+.item .meta{color:var(--muted);font-size:.85rem}
+.stepper{display:flex;align-items:center;gap:4px}
+.stepper button{padding:4px 10px;min-width:36px}
+.stepper output{min-width:64px;text-align:center}
+.doit{background:var(--ink);color:var(--surface);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:8px}
+.doit h2{font-size:1.45rem}
+.doit p{font-size:1.1rem;line-height:1.7}
+.actions{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.actions li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.actions .gain{font-family:var(--f-num);font-weight:500;color:var(--ok);direction:ltr}
+.tbl{width:100%;border-collapse:collapse;font-size:.92rem}
+.tbl th,.tbl td{text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{color:var(--muted);font-weight:600;font-size:.82rem;letter-spacing:.02em}
+.scroll{overflow-x:auto}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;background:var(--bg)}
+.drop img{max-height:220px;border-radius:10px;object-fit:cover}
+.muted{color:var(--muted)} .small{font-size:.85rem}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spinner{animation:none}}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline:max(16px,env(safe-area-inset-left,0px));margin:0 auto;max-width:420px;background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:10px;font-size:.92rem;z-index:20;text-align:center}
+.src{display:flex;flex-direction:column;gap:2px}
+.src a{font-weight:600}
+details summary{cursor:pointer;font-weight:600}
+.calib-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+</style>
+<style>
+html{color-scheme:light}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0} img{max-width:100%} [hidden]{display:none!important}
+.mealcard{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.mealcard .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.reading-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.reading-row select,.reading-row input{width:auto}
+.conf{font-size:.75rem;padding:1px 8px}
+footer.foot{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px;color:var(--muted);font-size:.85rem;display:flex;flex-direction:column;gap:6px}
+.dose{display:flex;gap:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <div class="brand"><b>Preventive Glucose AI</b><span>توقّع منحنى السكر قبل اللقمة الأولى — نسخة تجريبية</span></div>
+    <nav class="tabs" aria-label="أقسام">
+      <a href="#home" data-v="home">الرئيسية</a>
+      <a href="#profile" data-v="profile">١. ملفي</a>
+      <a href="#calibration" data-v="calibration">٢. المعايرة</a>
+      <a href="#meal" data-v="meal">٣. وجبتي</a>
+      <a href="#history" data-v="history">السجل</a>
+      <a href="#sources" data-v="sources">المصادر</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="view" id="v-home">
+  <div class="card">
+    <h1 id="hello">صوّر صحنك، واعرف وش يسوي في سكرك قبل ما تاكل</h1>
+    <p class="lead">التطبيق يبني نموذجاً لجسمك من بياناتك ومن اختبار جلوكوز بسيط في الصباح، ثم يقدّر منحنى سكرك لأي وجبة خلال ثلاث ساعات، ويعطيك أقوى خطوة تسطّح القمة. كل قراءة تدخلها بعد الأكل تحسّن التوقع.</p>
+    <p class="small muted">بياناتك تنحفظ في جهازك فقط، ما تنرسل لأي خادم. خذ نسخة احتياطية من صفحة السجل.</p>
+  </div>
+  <div class="steps" id="progress"></div>
+  <div class="card">
+    <h3>ملخص نموذجك الشخصي</h3>
+    <div class="kv" id="model-kv"></div>
+    <p class="small muted" id="model-note"></p>
+  </div>
+  <div class="alert warn small"><b>تنبيه مهم</b><span>أداة مساعدة لنمط الحياة والتوجيه الغذائي، وليست تشخيصاً ولا بديلاً عن الطبيب. لا تغيّر جرعة أي دواء بناءً عليها.</span></div>
+</section>
+
+<section class="view" id="v-profile" hidden>
+  <div class="card">
+    <h2>بياناتك الأساسية</h2>
+    <p class="lead">تحدد نقطة البداية للنموذج، وتحدد هل اختبار المعايرة آمن لك.</p>
+    <div id="profile-example" class="example" hidden>القيم المعروضة مثال توضيحي. عدّلها ببياناتك واضغط حفظ.</div>
+    <form id="pf" class="card" style="border:0;padding:0">
+      <div class="fields">
+        <label class="f"><span>الاسم</span><input id="p-name" autocomplete="name"></label>
+        <label class="f"><span>العمر (سنة)</span><input id="p-age" type="number" min="10" max="110" inputmode="numeric"></label>
+        <label class="f"><span>الجنس</span><select id="p-sex"><option value="m">ذكر</option><option value="f">أنثى</option></select></label>
+        <label class="f"><span>الطول (سم)</span><input id="p-height" type="number" min="100" max="230" inputmode="numeric"></label>
+        <label class="f"><span>الوزن (كجم)</span><input id="p-weight" type="number" min="30" max="300" inputmode="decimal"></label>
+        <label class="f"><span>محيط الخصر (سم) — اختياري</span><input id="p-waist" type="number" min="40" max="200" inputmode="numeric"></label>
+        <label class="f"><span>التراكمي HbA1c % — اختياري</span><input id="p-a1c" type="number" step="0.1" min="3" max="15" inputmode="decimal"></label>
+        <label class="f"><span>السكر الصائم ملجم/دسل — اختياري</span><input id="p-fbg" type="number" min="40" max="400" inputmode="numeric"></label>
+      </div>
+      <label class="f"><span>حالتك حسب آخر تشخيص</span>
+        <select id="p-status">
+          <option value="none">ما عندي تشخيص (أبي الوقاية)</option>
+          <option value="pre">ما قبل السكري</option>
+          <option value="t2">سكري النوع الثاني</option>
+          <option value="t1">سكري النوع الأول</option>
+          <option value="gdm">سكري الحمل / حامل حالياً</option>
+        </select></label>
+      <fieldset><legend>أدوية السكر الحالية</legend>
+        <label class="chk"><input type="checkbox" id="m-met">ميتفورمين</label>
+        <label class="chk"><input type="checkbox" id="m-su">سلفونيل يوريا (أماريل، دايمكرون…)</label>
+        <label class="chk"><input type="checkbox" id="m-ins">إنسولين</label>
+        <label class="chk"><input type="checkbox" id="m-glp">GLP-1 (أوزمبك، مونجارو، ساكسندا…)</label>
+        <label class="chk"><input type="checkbox" id="m-sglt">SGLT2 (جارديانس، فورسيجا…)</label>
+        <label class="chk"><input type="checkbox" id="m-acar">أكاربوز (جلوكوباي)</label>
+      </fieldset>
+      <fieldset><legend>حالات أخرى</legend>
+        <label class="chk"><input type="checkbox" id="c-preg">حمل</label>
+        <label class="chk"><input type="checkbox" id="c-ckd">مرض كلى متقدم أو غسيل</label>
+        <label class="chk"><input type="checkbox" id="c-hypo">نوبات هبوط متكررة</label>
+        <label class="chk"><input type="checkbox" id="c-care">أنا مرافق أستخدمه لأحد أفراد أسرتي</label>
+      </fieldset>
+      <div class="row"><button class="primary" type="submit">حفظ البيانات</button><span class="small muted" id="bmi-out"></span></div>
+    </form>
+  </div>
+  <div id="gate"></div>
+</section>
+
+<section class="view" id="v-calibration" hidden>
+  <div class="card">
+    <h2>اختبار المعايرة بالجلوكوز</h2>
+    <p class="lead">جلوكوز نقي على معدة فاضية يعطي استجابة جسمك بدون أي عامل يبطّئ الامتصاص. ولأن المؤشر الجلايسيمي لكل الأطعمة محسوب نسبةً للجلوكوز، نقدر نحوّل ارتفاعك هنا مباشرة لتوقّع أي وجبة.</p>
+    <div id="cal-gate"></div>
+    <div class="grid2">
+      <div class="step"><span class="st">قبل الاختبار</span><p>صيام ٨ إلى ١٢ ساعة (ماء فقط)، نوم كافي، بدون رياضة قبلها، وبدون مرض حاد. خذ ميتفورمين أو أدويتك المعتادة كالعادة.</p></div>
+      <div class="step"><span class="st">الجرعة</span>
+        <div class="dose" id="dose-seg"><button type="button" data-v="50">٥٠ جم (الافتراضي)</button><button type="button" data-v="75">٧٥ جم</button></div>
+        <p>بودرة <b>جلوكوز (دكستروز)</b> من الصيدلية، أو محلول اختبار التحمل الجاهز. تُذاب في ٢٥٠ مل ماء وتُشرب خلال ٥ دقائق. <b>سكر الطاولة ما يصلح</b> لأن نصّه فركتوز.</p></div>
+      <div class="step"><span class="st">القياس</span><p>قِس بالوخز قبل الشرب، ثم بعد <b>٣٠، ٦٠، ٩٠، ١٢٠</b> دقيقة من بداية الشرب. اجلس طول الاختبار. الأقل المقبول: قبل، ٣٠، ٦٠، ١٢٠.</p></div>
+    </div>
+    <div class="alert bad small"><b>أوقف الاختبار فوراً</b><span>إذا حسيت بدوخة شديدة أو تعرّق أو رجفة، أو وصلت أي قراءة ٢٥٠ أو أكثر.</span></div>
+  </div>
+  <div class="card" id="cal-input">
+    <h3>أدخل قراءاتك (ملجم/دسل)</h3>
+    <form id="cf">
+      <div class="calib-grid">
+        <label class="f"><span>قبل الشرب</span><input id="c-0" type="number" inputmode="numeric" min="30" max="600"></label>
+        <label class="f"><span>بعد ٣٠ د</span><input id="c-30" type="number" inputmode="numeric" min="30" max="600"></label>
+        <label class="f"><span>بعد ٦٠ د</span><input id="c-60" type="number" inputmode="numeric" min="30" max="600"></label>
+        <label class="f"><span>بعد ٩٠ د</span><input id="c-90" type="number" inputmode="numeric" min="30" max="600"></label>
+        <label class="f"><span>بعد ١٢٠ د</span><input id="c-120" type="number" inputmode="numeric" min="30" max="600"></label>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="primary" type="submit">احسب بصمتي</button><button class="ghost" type="button" id="c-demo">املأ بمثال</button></div>
+    </form>
+    <div id="calib-msg"></div>
+    <div class="chart" id="calib-chart"></div>
+    <div class="kv" id="calib-kv"></div>
+  </div>
+</section>
+
+<section class="view" id="v-meal" hidden>
+  <div class="card">
+    <h2>وجبتي</h2>
+    <div class="drop" id="drop">
+      <img id="meal-img" alt="صورة الوجبة" hidden>
+      <p id="drop-txt">صورة واضحة من فوق للصحن. إذا الأكل في صينية مشتركة، صوّرها كاملة ونحدد نصيبك بعدها.</p>
+      <div class="row" style="justify-content:center">
+        <input type="file" id="file" accept="image/*" capture="environment" hidden>
+        <button type="button" class="accent" id="pick">صوّر أو اختر صورة</button>
+        <button class="primary" id="analyze" disabled>حلّل الصورة</button>
+      </div>
+      <p class="small muted" id="ai-status"></p>
+    </div>
+    <div class="row">
+      <input id="search" type="search" placeholder="ابحث عن صنف: كبسة، تمر، شاورما…" style="flex:2 1 220px" aria-label="ابحث عن صنف" list="foods-list">
+      <datalist id="foods-list"></datalist>
+      <button id="add-btn">أضف</button>
+    </div>
+  </div>
+
+  <div class="card" id="items-card">
+    <div class="row" style="justify-content:space-between"><h3>محتوى الوجبة</h3><span id="meal-example" class="pill">مثال</span></div>
+    <div id="shared" hidden class="alert warn small">
+      <b>الصحن يبدو مشترك</b><span>كم نصيبك من الصينية؟</span>
+      <div class="seg" id="share-seg"><button type="button" data-s="0.25">ربع</button><button type="button" data-s="0.33">ثلث</button><button type="button" data-s="0.5">نص</button><button type="button" data-s="1">كلها لي</button></div>
+    </div>
+    <div class="items" id="items"></div>
+    <div class="kv" id="meal-totals"></div>
+  </div>
+
+  <div class="card">
+    <h3>قبل التوقع</h3>
+    <div class="grid2">
+      <div><p class="small muted">وش بتبدأ فيه؟</p><div class="seg" id="ord-seg"><button type="button" data-v="carb">النشويات أول</button><button type="button" data-v="mixed">كله مع بعض</button><button type="button" data-v="veg">السلطة واللحم أول</button></div></div>
+      <div><p class="small muted">بعد الأكل؟</p><div class="seg" id="walk-seg"><button type="button" data-v="0">جلوس</button><button type="button" data-v="10">مشي ١٠ دقائق</button><button type="button" data-v="20">مشي ٢٠ دقيقة</button></div></div>
+      <div><p class="small muted">وقت الوجبة</p><div class="seg" id="time-seg"><button type="button" data-v="morning">فطور</button><button type="button" data-v="noon">غداء</button><button type="button" data-v="evening">عشاء</button><button type="button" data-v="iftar">إفطار صائم</button></div></div>
+      <label class="f"><span>قراءتك قبل الأكل (اختياري، تحسّن الدقة)</span><input id="pre" type="number" inputmode="numeric" min="40" max="400" placeholder="ملجم/دسل"></label>
+    </div>
+  </div>
+  <div id="result"></div>
+</section>
+
+<section class="view" id="v-history" hidden>
+  <div class="card">
+    <h2>السجل والتعلّم</h2>
+    <p class="lead">أدخل قراءة الجهاز بعد الوجبة، وقل لنا هل طبّقت الخطوات. النموذج يقارن بالتوقع الصحيح ويتعدّل.</p>
+    <div class="kv" id="acc-kv"></div>
+    <div id="hist" class="items"></div>
+  </div>
+  <div class="card">
+    <h3>نسخة احتياطية</h3>
+    <p class="small muted">البيانات محفوظة في هذا المتصفح فقط. لو مسحت بيانات المتصفح أو غيّرت الجوال تضيع، فخذ نسخة.</p>
+    <div class="row"><button id="exp">نزّل نسخة من بياناتي</button><button id="imp-btn">استرجع من نسخة</button><input type="file" id="imp" accept="application/json" hidden><button class="ghost" id="wipe">امسح كل بياناتي</button></div>
+    <div id="wipe-confirm" hidden class="alert bad small"><b>متأكد؟ المسح نهائي.</b><div class="row"><button id="wipe-yes" class="primary">نعم امسح</button><button id="wipe-no">تراجع</button></div></div>
+  </div>
+</section>
+
+<section class="view" id="v-sources" hidden>
+  <div class="card">
+    <h2>من وين البيانات</h2>
+    <p class="lead">كل رقم في قاعدة الأكل له مصدر. الأطباق التقليدية من دراسة سعودية منشورة، والتمور من دراسة القصيم، والباقي قيم قياسية مقدّرة.</p>
+    <div class="scroll"><table class="tbl" id="db-table"></table></div>
+    <p class="small muted">* المؤشر الجلايسيمي للأطباق المركّبة تقدير محافظ، لعدم وجود قياس سعودي منشور لها بعد.</p>
+  </div>
+  <div class="card"><h3>كيف يحسب التطبيق</h3>
+    <ol class="small" style="margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px">
+      <li><b>حساسيتك</b> = ارتفاع السكر في اختبار الجلوكوز ÷ جرامات الجلوكوز.</li>
+      <li><b>الحمل الجلايسيمي للوجبة</b> = مجموع (النشويات المتاحة × المؤشر الجلايسيمي ÷ ١٠٠) لكل صنف.</li>
+      <li><b>الارتفاع المتوقع</b> = حساسيتك × الحمل × معاملات: ترتيب الأكل، المشي، البروتين والدهون والألياف، الأدوية، وقت الوجبة.</li>
+      <li><b>وقت القمة</b> = وقت قمتك في الاختبار + ١٥ دقيقة للأكل الصلب، وأكثر مع الدهون والألياف.</li>
+      <li><b>التعلّم</b>: كل قراءة تعدّل حساسيتك بوزن يقل كلما زادت قراءاتك، ونطاق الخطأ يضيق.</li>
+    </ol></div>
+  <div class="card"><h3>المراجع</h3><div class="grid2" id="src-list"></div></div>
+</section>
+</main>
+<footer class="foot"><span>Preventive Glucose AI — نسخة تجريبية. ليست جهازاً طبياً ولا تُستخدم للتشخيص.</span></footer>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ===== CONFIG: set to your Cloudflare Worker URL to enable photo analysis ===== */
+const AI_ENDPOINT = ""; // e.g. "https://glucose-ai.<you>.workers.dev"
+
+/* ===== Saudi food table (per 100 g) =====
+ F25 = Basaqr et al., Front Nutr 2025; QD = AlGeffari et al., Ann Saudi Med 2016; STD = standard values (estimate) */
+const FOODS = {
+  kabsa_chicken:{ar:"كبسة دجاج",c:14.64,f:0.68,p:5.06,fat:3.26,gi:65,src:"F25",unit:["صحن",350]},
+  kabsa_meat:{ar:"كبسة لحم",c:15.56,f:0.72,p:7.28,fat:4.97,gi:65,src:"F25",unit:["صحن",350]},
+  mandi:{ar:"مندي",c:11.15,f:0.33,p:5.42,fat:3.9,gi:65,src:"F25",unit:["صحن",350]},
+  saleeq:{ar:"سليق",c:11.08,f:0.26,p:6.51,fat:4.32,gi:72,src:"F25",unit:["صحن",350]},
+  jareesh:{ar:"جريش",c:15.72,f:0.75,p:5.06,fat:3.92,gi:55,src:"F25",unit:["صحن",300]},
+  margoug:{ar:"مرقوق",c:10.98,f:1.82,p:4.08,fat:3.6,gi:60,src:"F25",unit:["صحن",350]},
+  haneeth:{ar:"حنيذ مع رز",c:12.45,f:0.37,p:12.96,fat:1.96,gi:65,src:"F25",unit:["صحن",350]},
+  hasawi:{ar:"رز حساوي باللحم",c:16.97,f:1.76,p:7.08,fat:4.45,gi:55,src:"F25",unit:["صحن",300]},
+  mansaf:{ar:"منسف",c:16.25,f:0.56,p:12.27,fat:13.25,gi:60,src:"F25",unit:["صحن",350]},
+  tharid:{ar:"ثريد",c:9.24,f:0.82,p:5.83,fat:4.53,gi:65,src:"F25",unit:["صحن",350]},
+  mutabbaq:{ar:"مطبق",c:15.95,f:1.95,p:7.01,fat:6.94,gi:62,src:"F25",unit:["حبة",150]},
+  sayaddiyah:{ar:"صيادية",c:26.61,f:1.33,p:9.38,fat:2.76,gi:65,src:"F25",unit:["صحن",300]},
+  temmn:{ar:"تمن",c:14.67,f:0.71,p:5.71,fat:4.03,gi:65,src:"F25",unit:["صحن",300]},
+  areekah:{ar:"عريكة",c:50.16,f:5.67,p:5.63,fat:10.28,gi:60,src:"F25",unit:["صحن صغير",150]},
+  aseedah:{ar:"عصيدة جنوبية",c:48.22,f:5.83,p:4.24,fat:6.09,gi:60,src:"F25",unit:["صحن صغير",150]},
+  masoob:{ar:"معصوب",c:35.15,f:4.7,p:3.79,fat:4.05,gi:70,src:"F25",unit:["صحن",250]},
+  hininy:{ar:"حنيني",c:37.52,f:2.8,p:3.43,fat:5.06,gi:62,src:"F25",unit:["صحن صغير",150]},
+  rice_white:{ar:"رز أبيض مطبوخ سادة",c:28.2,f:0.4,p:2.7,fat:0.3,gi:73,src:"STD",unit:["كوب",160]},
+  khubz:{ar:"خبز عربي / تميس",c:55,f:2.5,p:9,fat:1.2,gi:75,src:"STD",unit:["رغيف",90]},
+  dates_sukkari:{ar:"تمر سكري",c:75,f:7,p:2.2,fat:0.4,gi:43,src:"QD",unit:["تمرة",12]},
+  dates_khalas:{ar:"تمر خلاص",c:73,f:6.5,p:2.3,fat:0.4,gi:55,src:"QD",unit:["تمرة",10]},
+  salad:{ar:"سلطة خضار",c:4,f:1.8,p:1,fat:2,gi:15,src:"STD",unit:["صحن",150]},
+  chicken_grill:{ar:"دجاج مشوي",c:0,f:0,p:30,fat:7,gi:0,src:"STD",unit:["ربع",180]},
+  meat_lamb:{ar:"لحم غنم مطبوخ",c:0,f:0,p:25,fat:17,gi:0,src:"STD",unit:["قطعة",120]},
+  laban:{ar:"لبن",c:4.5,f:0,p:3.3,fat:1.5,gi:35,src:"STD",unit:["كوب",240]},
+  coffee_ar:{ar:"قهوة عربية",c:0.3,f:0,p:0.1,fat:0,gi:0,src:"STD",unit:["فنجال",50],liquid:true},
+  tea_sweet:{ar:"شاي بسكر",c:4,f:0,p:0,fat:0,gi:65,src:"STD",unit:["بيالة",100],liquid:true},
+  juice:{ar:"عصير / فيمتو محلّى",c:11,f:0,p:0,fat:0,gi:60,src:"STD",unit:["كوب",250],liquid:true},
+  soda:{ar:"مشروب غازي",c:10.6,f:0,p:0,fat:0,gi:63,src:"STD",unit:["علبة",355],liquid:true},
+  shawarma:{ar:"ساندويتش شاورما",c:25,f:1.5,p:12,fat:10,gi:65,src:"STD",unit:["ساندويتش",220]},
+  broast:{ar:"بروست",c:12,f:0.5,p:20,fat:15,gi:70,src:"STD",unit:["قطعتين",250]},
+  fries:{ar:"بطاطس مقلية",c:41,f:3.8,p:3.4,fat:15,gi:70,src:"STD",unit:["حبة وسط",117]},
+  kunafa:{ar:"كنافة",c:40,f:1,p:6,fat:15,gi:70,src:"STD",unit:["قطعة",120]},
+  basbousa:{ar:"بسبوسة",c:52,f:1,p:4,fat:12,gi:70,src:"STD",unit:["قطعة",80]},
+  sambosa:{ar:"سمبوسة",c:30,f:1.5,p:7,fat:14,gi:65,src:"STD",unit:["حبة",40]},
+  foul:{ar:"فول مدمس",c:15,f:5.5,p:7.5,fat:3,gi:40,src:"STD",unit:["صحن",250]},
+  egg:{ar:"بيض",c:1,f:0,p:12.6,fat:10,gi:0,src:"STD",unit:["بيضة",50]},
+  luqaimat:{ar:"لقيمات بالدبس",c:55,f:1,p:5,fat:14,gi:75,src:"STD",unit:["٥ حبات",100]},
+  oats:{ar:"شوفان مطبوخ بالحليب",c:12,f:1.7,p:4.5,fat:2.5,gi:55,src:"STD",unit:["صحن",250]}
+};
+const SRC_NAME={F25:"Basaqr وآخرون ٢٠٢٥",QD:"الجفاري وآخرون ٢٠١٦ (القصيم)",STD:"قيم قياسية — تقدير",AI:"تقدير تحليل الصورة"};
+const GLUCOSE_DELAY=15; // solid food peaks later than a glucose drink
+
+/* ===== helpers ===== */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+function toast(t){const e=$("#toast");e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3200)}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+const r0=x=>Math.round(x), r1=x=>Math.round(x*10)/10;
+
+/* ===== storage (this device only) ===== */
+const Store={
+  get(k){try{const v=localStorage.getItem("pga_"+k);return v?JSON.parse(v):null}catch(e){return null}},
+  set(k,v){try{localStorage.setItem("pga_"+k,JSON.stringify(v));return true}catch(e){toast("تعذّر الحفظ: المتصفح يمنع التخزين");return false}},
+  meals(){return this.get("meals")||[]},
+  saveMeal(m){let all=this.meals();const i=all.findIndex(x=>x.id===m.id);if(i>=0)all[i]=m;else all.unshift(m);return this.set("meals",all.slice(0,300))},
+  all(){return {v:2,exported:new Date().toISOString(),profile:this.get("profile"),model:this.get("model"),calib:this.get("calib"),meals:this.meals()}},
+  wipe(){for(const k of ["profile","model","calib","meals"])try{localStorage.removeItem("pga_"+k)}catch(e){}}
+};
+
+/* ===== state ===== */
+const EXAMPLE_PROFILE={name:"أبو محمد (مثال)",age:62,sex:"m",height:170,weight:92,waist:108,a1c:6.1,fbg:108,status:"pre",meds:{met:true},cond:{},example:true};
+let S={profile:null,model:null,calib:null,meals:[],meal:null,ctx:{order:"mixed",walk:"0",time:"noon"},share:1,img:null,dose:50};
+
+/* ===== model ===== */
+function bmi(p){return p&&p.height&&p.weight?p.weight/Math.pow(p.height/100,2):null}
+function priorModel(p){
+  // s = mg/dL peak rise per 1 unit of glycemic load (1 g glucose = 1 unit)
+  // anchor: healthy adults ≈ +38 mg/dL after 50 g glucose (Buchanan & McKiddie 1967) → ≈0.8
+  let s={none:0.85,pre:1.35,t2:2.1,t1:2.5,gdm:1.6}[p.status]||1.0;
+  if(p.a1c)s=Math.max(0.7,Math.min(3.2,0.8+(p.a1c-5.2)*0.95));
+  const b=bmi(p); if(b>=30)s*=1.1; if(p.age>=60)s*=1.08;
+  if(p.meds&&p.meds.met&&!p.a1c)s*=0.92;
+  let tpG={none:30,pre:45,t2:60,t1:60,gdm:45}[p.status]||45; if(p.age>=60)tpG+=5;
+  const g0=p.fbg||{none:92,pre:108,t2:135,t1:140,gdm:95}[p.status]||100;
+  return {s,tpG,g0,n:0,calibrated:false,log:[]};
+}
+function mealTotals(items,share){
+  let c=0,f=0,p=0,fat=0,gl=0,liqGL=0,kcal=0;
+  for(const it of items){const g=it.grams*(it.personal?1:share),F=it.data,avail=Math.max(0,F.c-F.f)*g/100;
+    c+=F.c*g/100;f+=F.f*g/100;p+=F.p*g/100;fat+=F.fat*g/100;const l=avail*F.gi/100;gl+=l;if(F.liquid)liqGL+=l;kcal+=(F.c*4+F.p*4+F.fat*9)*g/100;}
+  return {c,f,p,fat,gl,liqGL,kcal};
+}
+const FACTORS={order:{carb:1,mixed:0.82,veg:0.6},walk:{"0":1,"10":0.88,"20":0.82},time:{morning:1,noon:1,evening:1.08,iftar:1.1}};
+function predict(items,share,ctx,model,prof,g0override){
+  const T=mealTotals(items,share),meds=(prof&&prof.meds)||{};
+  const solidGL=T.gl-T.liqGL;
+  const mix=1/(1+0.004*T.fat+0.003*T.p+0.02*T.f);
+  let m=(FACTORS.walk[ctx.walk]??1)*mix*(FACTORS.time[ctx.time]??1), delay=0;
+  if(meds.glp){m*=0.6;delay+=30} if(meds.acar){m*=0.78;delay+=15}
+  const effGL=solidGL*(FACTORS.order[ctx.order]??0.82)+T.liqGL;
+  const rise=Math.max(0,model.s*effGL*m), g0=g0override||model.g0;
+  let tp=model.tpG+GLUCOSE_DELAY+delay; if(T.fat>25)tp+=15; if(ctx.order==="veg")tp+=10; if(T.f>8)tp+=10;
+  if(solidGL<1&&T.liqGL>0)tp=Math.max(25,model.tpG);
+  tp=Math.min(tp,140);
+  const tail=tp*1.1+T.fat*1.2, n=model.n+(model.calibrated?3:0);
+  const cv=Math.max(0.12,0.35/Math.sqrt(1+n));
+  const curve=[];for(let t=0;t<=180;t+=5){let y;if(t<=tp){const x=t/tp;y=rise*x*x*Math.exp(2*(1-x))}else{const x=(t-tp)/tail;y=rise*Math.exp(-1.2*x*x)}curve.push([t,g0+y])}
+  return {T,rise,peak:g0+rise,tp,cv,curve,g0};
+}
+function zone(peak){if(peak<140)return["ok","آمن","تحت ١٤٠"];if(peak<180)return["warn","انتبه","بين ١٤٠ و١٨٠"];return["bad","قمة عالية","فوق ١٨٠"]}
+function valAt(curve,t){return curve.reduce((a,b)=>Math.abs(b[0]-t)<Math.abs(a[0]-t)?b:a)[1]}
+
+/* ===== chart ===== */
+function chartSVG(series,opts={}){
+  const W=640,H=300,L=46,R=14,Tp=14,B=36;
+  const ymaxData=Math.max(...series.flatMap(s=>s.pts.map(p=>s.band?s.g0+(p[1]-s.g0)*(1+s.band):p[1])),200);
+  const ymin=60,ymax=Math.ceil(ymaxData/20)*20+10;
+  const X=t=>L+(W-L-R)*t/180,Y=v=>Tp+(H-Tp-B)*(1-(v-ymin)/(ymax-ymin));
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.label||"منحنى السكر")}" style="direction:ltr">`;
+  g+=`<rect x="${L}" y="${Y(ymax)}" width="${W-L-R}" height="${Math.max(0,Y(180)-Y(ymax))}" fill="var(--bad-soft)"/><rect x="${L}" y="${Y(180)}" width="${W-L-R}" height="${Y(140)-Y(180)}" fill="var(--warn-soft)"/>`;
+  for(let v=60;v<=ymax;v+=40)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" font-size="11" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${v}</text>`;
+  for(const t of [0,30,60,90,120,150,180])g+=`<text x="${X(t)}" y="${H-B+18}" font-size="11" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${t}</text>`;
+  g+=`<text x="${(W+L)/2}" y="${H-4}" font-size="11" text-anchor="middle" fill="var(--muted)">${esc(opts.xlabel||"دقائق بعد أول لقمة")}</text>`;
+  for(const s of series){
+    if(s.band){const up=s.pts.map(p=>[X(p[0]),Y(s.g0+(p[1]-s.g0)*(1+s.band))]),dn=s.pts.map(p=>[X(p[0]),Y(s.g0+(p[1]-s.g0)*(1-s.band))]).reverse();
+      g+=`<path d="M${up.map(p=>p.join(",")).join("L")}L${dn.map(p=>p.join(",")).join("L")}Z" fill="var(--band)"/>`}
+    g+=`<path d="M${s.pts.map(p=>X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join("L")}" fill="none" stroke="${s.color}" stroke-width="${s.w||2.5}" stroke-dasharray="${s.dash||""}" stroke-linejoin="round"/>`;
+    if(s.dots)for(const p of s.pts)g+=`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="4.5" fill="${s.color}"/><text x="${X(p[0])}" y="${Y(p[1])-9}" font-size="11" text-anchor="middle" fill="var(--ink)" font-family="IBM Plex Mono,monospace">${r0(p[1])}</text>`;
+    if(s.peak)g+=`<circle cx="${X(s.peak[0])}" cy="${Y(s.peak[1])}" r="5" fill="${s.color}"/><text x="${X(s.peak[0])}" y="${Y(s.peak[1])-10}" font-size="12" text-anchor="middle" fill="var(--ink)" font-family="IBM Plex Mono,monospace">${r0(s.peak[1])}</text>`;
+  }
+  return g+"</svg>";
+}
+
+/* ===== router ===== */
+const VIEWS=["home","profile","calibration","meal","history","sources"];
+function route(){const v=VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):"home";
+  for(const x of VIEWS)$("#v-"+x).hidden=x!==v;
+  $$("nav.tabs a").forEach(a=>a.setAttribute("aria-current",a.dataset.v===v?"page":"false"));
+  if(v==="history")renderHistory(); if(v==="home")renderHome(); if(v==="calibration")renderCalGate(); window.scrollTo(0,0)}
+window.addEventListener("hashchange",route);
+
+/* ===== profile + safety gate ===== */
+const MEDS=["met","su","ins","glp","sglt","acar"],CONDS=["preg","ckd","hypo","care"];
+function fillProfile(p){
+  for(const [k,id] of [["name","#p-name"],["age","#p-age"],["sex","#p-sex"],["height","#p-height"],["weight","#p-weight"],["waist","#p-waist"],["a1c","#p-a1c"],["fbg","#p-fbg"],["status","#p-status"]])$(id).value=p[k]??(k==="sex"?"m":k==="status"?"none":"");
+  for(const k of MEDS)$("#m-"+k).checked=!!(p.meds||{})[k]; for(const k of CONDS)$("#c-"+k).checked=!!(p.cond||{})[k];
+  $("#profile-example").hidden=!p.example; showBMI(); renderGate(p);
+}
+function readProfile(){const n=id=>{const v=parseFloat($(id).value);return isFinite(v)?v:null};const meds={},cond={};
+  for(const k of MEDS)meds[k]=$("#m-"+k).checked; for(const k of CONDS)cond[k]=$("#c-"+k).checked;
+  return {name:$("#p-name").value.trim(),age:n("#p-age"),sex:$("#p-sex").value,height:n("#p-height"),weight:n("#p-weight"),waist:n("#p-waist"),a1c:n("#p-a1c"),fbg:n("#p-fbg"),status:$("#p-status").value,meds,cond}}
+function showBMI(){const b=bmi(readProfile());$("#bmi-out").innerHTML=b?`مؤشر كتلة الجسم <span class="num">${r1(b)}</span> — ${b<25?"طبيعي":b<30?"زيادة وزن":"سمنة"}`:""}
+["#p-height","#p-weight"].forEach(s=>$(s).addEventListener("input",showBMI));
+function gateOf(p){const out={level:"ok",msgs:[]},c=p.cond||{},m=p.meds||{};
+  if(p.status==="t1"||p.status==="gdm"||c.preg||c.ckd||(p.age&&p.age<18)){out.level="stop";out.msgs.push("حالتك (سكري النوع الأول، الحمل، أمراض الكلى المتقدمة، أو العمر تحت ١٨) تحتاج متابعة طبية مباشرة. التطبيق يعرض معلومات فقط بدون توقعات.")}
+  if(c.hypo){if(out.level==="ok")out.level="caution";out.msgs.push("عندك نوبات هبوط متكررة: راجع طبيبك قبل أي تغيير في الأكل أو المشي.")}
+  if(m.ins||m.su){if(out.level==="ok")out.level="caution";out.msgs.push("أدويتك (إنسولين أو سلفونيل يوريا) ممكن تسبب هبوط. التطبيق ما يقترح تقليل النشويات، واختبار الجلوكوز ممنوع لك.")}
+  if(p.status==="none"&&((p.a1c&&p.a1c>=6.5)||(p.fbg&&p.fbg>=126))){if(out.level==="ok")out.level="caution";out.msgs.push("أرقامك (تراكمي ٦٫٥ أو أكثر، أو صائم ١٢٦ أو أكثر) في نطاق السكري. لازم تأكيد التشخيص عند طبيب، واختبار الجلوكوز ممنوع لك قبلها.")}
+  if(p.status==="none"&&p.a1c>=5.7&&p.a1c<6.5)out.msgs.push("تراكمي بين ٥٫٧ و٦٫٤ = نطاق ما قبل السكري. هنا بالضبط تفرق عادات الوجبة.");
+  if(m.glp)out.msgs.push("أدوية GLP-1 تبطّئ تفريغ المعدة، فالقمة عندك أقل وأبطأ. النموذج يحسبها.");
+  return out}
+function calAllowed(p){const g=gateOf(p),m=p.meds||{};
+  if(g.level==="stop")return [false,"اختبار الجلوكوز غير مناسب لحالتك."];
+  if(m.ins||m.su)return [false,"ممنوع مع الإنسولين أو السلفونيل يوريا لخطر الهبوط بعد الاختبار."];
+  if((p.cond||{}).hypo)return [false,"ممنوع مع نوبات الهبوط المتكررة."];
+  if(p.status==="none"&&((p.a1c&&p.a1c>=6.5)||(p.fbg&&p.fbg>=126)))return [false,"أرقامك في نطاق السكري. أكّد التشخيص عند الطبيب أولاً."];
+  if(p.status==="t2"&&(!p.a1c||p.a1c>=7.5))return [false,"لمرضى النوع الثاني: مسموح فقط إذا التراكمي أقل من ٧٫٥ وبموافقة طبيبك. أدخل التراكمي في ملفك."];
+  if(p.status==="t2")return [true,"مسموح لك بجرعة ٥٠ جم فقط وبموافقة طبيبك."];
+  return [true,""]}
+function renderGate(p){const g=gateOf(p),cls={ok:"ok",caution:"warn",stop:"bad"}[g.level],head={ok:"التطبيق مناسب لك",caution:"مناسب لك مع احتياطات",stop:"وضع المعلومات فقط"}[g.level];
+  $("#gate").innerHTML=`<div class="alert ${cls}"><b>${head}</b>${g.msgs.map(m=>`<span>${esc(m)}</span>`).join("")||"<span>ما فيه موانع ظاهرة. الخطوة الجاية: اختبار المعايرة.</span>"}</div>`}
+$("#pf").addEventListener("submit",e=>{e.preventDefault();const p=readProfile();
+  if(!p.age||!p.height||!p.weight){toast("أدخل العمر والطول والوزن");return}
+  S.profile=p; if(!S.model||!S.model.calibrated)S.model=priorModel(p); else if(p.fbg&&!S.calib)S.model.g0=p.fbg;
+  Store.set("profile",p);Store.set("model",S.model);fillProfile(p);toast("انحفظت بياناتك");refreshMeal()});
+
+/* ===== calibration (glucose) ===== */
+function renderCalGate(){const p=S.profile||EXAMPLE_PROFILE,[ok,msg]=calAllowed(p);
+  $("#cal-gate").innerHTML=!S.profile?`<div class="alert warn small"><b>احفظ ملفك أولاً</b><span>نحتاج نعرف أدويتك وحالتك قبل ما نسمح بالاختبار.</span></div>`:ok?(msg?`<div class="alert warn small"><span>${esc(msg)}</span></div>`:""):`<div class="alert bad"><b>الاختبار غير مسموح لك</b><span>${esc(msg)} تقدر تستخدم التطبيق بالنموذج الأولي، ويتعلم من قراءاتك بعد الوجبات.</span></div>`;
+  $("#cal-input").hidden=!S.profile||!ok;
+  const t2=p.status==="t2"; if(t2)S.dose=50;
+  $$("#dose-seg button").forEach(b=>{b.setAttribute("aria-pressed",String(+b.dataset.v===S.dose));b.disabled=t2&&b.dataset.v==="75";b.onclick=()=>{S.dose=+b.dataset.v;renderCalGate()}})}
+$("#c-demo").addEventListener("click",()=>{const d={0:104,30:168,60:176,90:150,120:128};for(const t in d)$("#c-"+t).value=d[t];toast("أرقام مثال، استبدلها بقراءاتك")});
+$("#cf").addEventListener("submit",e=>{e.preventDefault();const R={};
+  for(const t of [0,30,60,90,120]){const v=parseFloat($("#c-"+t).value);if(isFinite(v))R[t]=v}
+  const msg=$("#calib-msg"),p=S.profile;
+  if(R[0]==null||R[30]==null||R[60]==null||R[120]==null){msg.innerHTML=`<div class="alert warn">نحتاج قراءة قبل الشرب، وبعد ٣٠ و٦٠ و١٢٠ دقيقة على الأقل.</div>`;return}
+  if(R[0]<70){msg.innerHTML=`<div class="alert bad"><b>قراءة الصيام أقل من ٧٠</b><span>هذا الاختبار ما كان المفروض يبدأ. إذا عندك أعراض، خذ ١٥ جم سكر سريع وأعد القياس بعد ١٥ دقيقة، وكلّم طبيبك.</span></div>`;return}
+  const fastLimit=p.status==="t2"?160:126;
+  if(R[0]>=fastLimit){msg.innerHTML=`<div class="alert bad"><b>قراءة الصيام ${fastLimit} أو أكثر</b><span>${p.status==="t2"?"سكرك مرتفع من البداية، الاختبار غير مناسب الآن.":"هذا الرقم قد يعني سكري. لا تعتمد على الاختبار، وراجع الطبيب لتأكيد التشخيص."}</span></div>`;return}
+  const vals=Object.values(R);let warn="";
+  if(Math.max(...vals)>=250)warn+=`<div class="alert bad"><b>وصلت قراءة ٢٥٠ أو أكثر</b><span>تواصل مع طبيبك. انحفظت النتيجة لكنها تحتاج تقييم طبي.</span></div>`;
+  if(Math.min(...vals.slice(1))<70)warn+=`<div class="alert bad"><b>نزلت قراءة تحت ٧٠</b><span>هبوط تفاعلي بعد الجلوكوز. عالجه بأكل خفيف، وبلّغ طبيبك.</span></div>`;
+  if(S.dose===75&&R[120]!=null){if(R[120]>=200)warn+=`<div class="alert bad"><b>قراءة الساعتين ٢٠٠ أو أكثر بعد ٧٥ جم</b><span>هذا في نطاق السكري حسب اختبار التحمل. الاختبار المنزلي ما يكفي للتشخيص، راجع طبيبك بهذي القراءات.</span></div>`;
+    else if(R[120]>=140)warn+=`<div class="alert warn"><b>قراءة الساعتين بين ١٤٠ و١٩٩</b><span>تتوافق مع ضعف تحمل الجلوكوز (ما قبل السكري). اعرضها على طبيبك.</span></div>`}
+  else if(Math.max(...vals)>=200)warn+=`<div class="alert warn"><b>قراءة ٢٠٠ أو أكثر بعد ٥٠ جم</b><span>استجابة عالية. اعرض القراءات على طبيبك.</span></div>`;
+  let peakT=0,peakV=R[0];for(const t of [30,60,90,120])if(R[t]!=null&&R[t]>peakV){peakV=R[t];peakT=t}
+  const rise=Math.max(5,peakV-R[0]),s=rise/S.dose,base=S.model||priorModel(p),prev=base.calibrated?base.s:null;
+  const shape=classifyShape(R);
+  const model={...base,s:prev?(prev+s)/2:s,tpG:peakT||30,g0:R[0],calibrated:true,calCount:(base.calCount||0)+1};
+  S.model=model;S.calib={R,ts:Date.now(),dose:S.dose,rise,peakT,s,shape};Store.set("model",model);Store.set("calib",S.calib);
+  renderCalib();msg.innerHTML=warn+`<div class="alert ok"><b>انحسبت بصمتك</b><span>${model.calCount>1?"دمجنا هذي المعايرة مع السابقة.":"الأفضل تعيد الاختبار في يوم ثاني خلال أسبوعين، لأن استجابة نفس الشخص تتغير من يوم ليوم."}</span></div>`;refreshMeal()});
+function classifyShape(R){const pts=[0,30,60,90,120].filter(t=>R[t]!=null);let peaks=0;
+  for(let i=1;i<pts.length-1;i++)if(R[pts[i]]>R[pts[i-1]]&&R[pts[i]]>R[pts[i+1]])peaks++;
+  const last=pts[pts.length-1];
+  if(R[last]>=Math.max(...pts.map(t=>R[t]))-2)return "متصاعد حتى النهاية: القمة متأخرة جداً";
+  return peaks>=2?"ثنائي القمة: نمط مرتبط بحساسية أفضل للإنسولين":"أحادي القمة: نمط أكثر شيوعاً مع ضعف حساسية الإنسولين"}
+function renderCalib(){const C=S.calib;if(!C){$("#calib-chart").innerHTML="";$("#calib-kv").innerHTML="";return}
+  for(const t in C.R)$("#c-"+t).value=C.R[t];
+  const pts=Object.keys(C.R).map(Number).sort((a,b)=>a-b).map(t=>[t,C.R[t]]);
+  $("#calib-chart").innerHTML=chartSVG([{pts,color:"var(--accent)",dots:true}],{label:"قراءات المعايرة",xlabel:"دقائق بعد الجلوكوز"});
+  const back=C.R[120]!=null?C.R[120]-C.R[0]:null;
+  $("#calib-kv").innerHTML=`<div><small>الجرعة</small><b>${C.dose||50} جم</b></div><div><small>الارتفاع الأقصى</small><b>+${r0(C.rise)}</b></div><div><small>وقت القمة</small><b>${C.peakT} د</b></div><div><small>حساسيتك لكل جرام</small><b>${r1(C.s)}</b></div><div><small>بعد ساعتين عن الصيام</small><b>${back!=null?(back>0?"+":"")+r0(back):"—"}</b></div><p class="small muted" style="grid-column:1/-1">شكل المنحنى: ${esc(C.shape||"")}. القمة عندك بعد ${C.peakT} دقيقة${C.peakT>=60?"، وهذا تأخر يتوافق مع ضعف المرحلة الأولى لإفراز الإنسولين":""}.</p>`}
+
+/* ===== meal ===== */
+function setSeg(id,key){$$(`#${id} button`).forEach(b=>{b.setAttribute("aria-pressed",String(b.dataset.v===S.ctx[key]));b.onclick=()=>{S.ctx[key]=b.dataset.v;setSeg(id,key);refreshMeal()}})}
+function setShare(){$$("#share-seg button").forEach(b=>{b.setAttribute("aria-pressed",String(parseFloat(b.dataset.s)===S.share));b.onclick=()=>{S.share=parseFloat(b.dataset.s);setShare();refreshMeal()}})}
+function mk(key,grams,extra={}){const F=FOODS[key];return {key,name:F.ar,grams,data:F,personal:false,...extra}}
+function exampleMeal(){return {example:true,shared:false,summary:"كبسة دجاج مع سلطة ولبن",items:[mk("kabsa_chicken",350),mk("salad",150),mk("laban",240)]}}
+$("#foods-list").innerHTML=Object.values(FOODS).map(f=>`<option value="${esc(f.ar)}">`).join("");
+function addSearch(){const q=$("#search").value.trim();if(!q)return;const hit=Object.entries(FOODS).find(([k,f])=>f.ar===q)||Object.entries(FOODS).find(([k,f])=>f.ar.includes(q));
+  if(!hit){toast("ما لقيت الصنف. جرّب اسم أقرب أو صوّر الوجبة");return}
+  if(!S.meal||S.meal.example)S.meal={items:[],shared:false,summary:""};S.meal.items.push(mk(hit[0],hit[1].unit[1],{personal:true}));$("#search").value="";refreshMeal()}
+$("#add-btn").addEventListener("click",addSearch);$("#search").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addSearch()}});
+$("#pre").addEventListener("input",()=>refreshMeal());
+function renderItems(){const M=S.meal;$("#meal-example").hidden=!M.example;$("#shared").hidden=!M.shared;setShare();
+  $("#items").innerHTML=M.items.length?M.items.map((it,i)=>{const g=it.grams*(it.personal?1:S.share),u=it.data.unit||["حصة",100];
+    const conf=it.conf!=null?`<span class="pill conf ${it.conf>=0.7?"ok":it.conf>=0.4?"warn":"bad"}">ثقة ${r0(it.conf*100)}٪</span>`:"";
+    return `<div class="item"><div style="min-width:0"><div class="nm">${esc(it.name)} ${conf}</div><div class="meta">${esc(SRC_NAME[it.data.src]||"")} · نشويات متاحة <span class="num">${r0(Math.max(0,it.data.c-it.data.f)*g/100)}</span> جم · ${esc(u[0])} ≈ ${u[1]} جم${M.shared&&!it.personal?" · بعد احتساب نصيبك":""}</div></div>
+    <div class="stepper"><button type="button" aria-label="أنقص" data-i="${i}" data-d="-1">−</button><output class="num">${r0(it.grams)} جم</output><button type="button" aria-label="زِد" data-i="${i}" data-d="1">+</button><button type="button" class="ghost" aria-label="احذف" data-i="${i}" data-d="x">✕</button></div></div>`}).join(""):`<p class="muted">ما فيه أصناف. صوّر وجبتك أو ابحث عن صنف.</p>`;
+  $$("#items button").forEach(b=>b.onclick=()=>{const i=+b.dataset.i,it=M.items[i];if(b.dataset.d==="x")M.items.splice(i,1);else{const step=Math.max(10,r0((it.data.unit?.[1]||100)/4));it.grams=Math.max(0,it.grams+step*+b.dataset.d)}M.example=false;refreshMeal()})}
+function variants(items,ctx,careful){
+  const out=[];
+  if(ctx.order!=="veg")out.push({id:"order",label:"ابدأ بالسلطة واللحم، وخلّ الرز والخبز آخر شي",detail:"كل الخضار والبروتين أول ١٠ دقائق، بعدها النشويات.",ctx:{order:"veg"}});
+  if(ctx.walk==="0")out.push({id:"walk",label:"امشِ ١٠ دقائق خلال ربع ساعة من آخر لقمة",detail:"داخل البيت أو الممر أو للمسجد. مشي خفيف يكفي.",ctx:{walk:"10"}});
+  if(items.some(it=>it.data.liquid&&it.data.gi>0))out.push({id:"drink",label:"بدّل المشروب المحلّى بماء أو لبن",detail:"السكر السائل يرفع بسرعة ولا يفيد معه ترتيب الأكل.",map:it=>it.data.liquid&&it.data.gi>0?{...it,grams:0}:it});
+  if(!careful&&items.some(it=>it.data.c-it.data.f>10&&!it.data.liquid))out.push({id:"less",label:"قلّل النشويات ربعاً (رز، خبز، حلا)",detail:"من صحن كامل لثلاثة أرباع، وزوّد السلطة أو البروتين بدالها.",map:it=>(it.data.c-it.data.f>10&&!it.data.liquid)?{...it,grams:it.grams*0.75}:it});
+  return out}
+function applyVariants(items,ctx,vs){let c={...ctx},its=items;for(const v of vs){if(v.ctx)c={...c,...v.ctx};if(v.map)its=its.map(v.map)}return [its,c]}
+function refreshMeal(){if(!S.meal)S.meal=exampleMeal();renderItems();
+  const prof=S.profile||EXAMPLE_PROFILE,model=S.model||priorModel(prof),gate=gateOf(prof),T=mealTotals(S.meal.items,S.share);
+  $("#meal-totals").innerHTML=`<div><small>كربوهيدرات</small><b>${r0(T.c)} جم</b></div><div><small>ألياف</small><b>${r1(T.f)} جم</b></div><div><small>بروتين</small><b>${r0(T.p)} جم</b></div><div><small>دهون</small><b>${r0(T.fat)} جم</b></div><div><small>الحمل الجلايسيمي</small><b>${r0(T.gl)}</b></div><div><small>سعرات</small><b>${r0(T.kcal)}</b></div>`;
+  const res=$("#result");if(!S.meal.items.length){res.innerHTML="";return}
+  if(gate.level==="stop"){res.innerHTML=`<div class="alert bad"><b>التوقعات متوقفة لحالتك</b><span>${esc(gate.msgs[0])}</span></div>`;return}
+  const pre=parseFloat($("#pre").value),g0=isFinite(pre)&&pre>=40?pre:null;
+  if(g0&&g0<70){res.innerHTML=`<div class="alert bad"><b>قراءتك قبل الأكل أقل من ٧٠</b><span>هذا هبوط. عالجه أولاً بـ١٥ جم سكر سريع وأعد القياس بعد ١٥ دقيقة، قبل أي توقع.</span></div>`;return}
+  const careful=!!(prof.meds&&(prof.meds.ins||prof.meds.su));
+  const pred=predict(S.meal.items,S.share,S.ctx,model,prof,g0),z=zone(pred.peak);
+  const vs=variants(S.meal.items,S.ctx,careful).map(v=>{const [its,c]=applyVariants(S.meal.items,S.ctx,[v]);const p=predict(its,S.share,c,model,prof,g0);return {...v,gain:pred.peak-p.peak,peak:p.peak}}).filter(v=>v.gain>=3).sort((a,b)=>b.gain-a.gain);
+  const [cItems,cCtx]=applyVariants(S.meal.items,S.ctx,vs);const combo=vs.length?predict(cItems,S.share,cCtx,model,prof,g0):null,zc=combo&&zone(combo.peak);
+  const doTxt=z[0]==="ok"?"وجبتك في الحدود الآمنة. استمر على نفس الترتيب.":vs[0]?vs[0].label+".":"الوجبة ثقيلة على السكر. خفف الكمية في المرة الجاية.";
+  const series=[{pts:pred.curve,color:"var(--curve)",band:pred.cv,g0:pred.g0,peak:[pred.tp,pred.peak]}];
+  if(combo)series.push({pts:combo.curve,color:"var(--curve2)",dash:"6 5",g0:pred.g0,peak:[combo.tp,combo.peak]});
+  const tMeasure=pred.tp<=60?60:pred.tp<=95?90:120;
+  S.lastPred={pred,combo,vs,tMeasure,model};
+  res.innerHTML=`${S.meal.example?'<div class="example">توقع لوجبة مثال وملف مثال. صوّر وجبتك واحفظ بياناتك عشان يصير التوقع لك.</div>':""}
+  ${!model.calibrated?'<div class="alert warn small"><span>النموذج الآن تقدير أولي من بياناتك فقط، والخطأ فيه أكبر. اختبار المعايرة يضيّقه.</span></div>':""}
+  <div class="doit" role="status"><span class="pill ${z[0]}">${z[1]} — القمة المتوقعة ${r0(pred.peak)} (${z[2]})</span><h2>افعل هذا الآن</h2><p>${esc(doTxt)}</p>
+  ${prof.cond&&prof.cond.care?'<p class="small" style="opacity:.85">وضع المرافق: اقرأ الجملة لصاحب الوجبة بصوت واضح.</p>':""}
+  <div class="row"><button type="button" class="accent" id="speak">اسمعها بصوت</button></div></div>
+  <div class="card"><div class="row" style="justify-content:space-between"><h3>المنحنى المتوقع</h3><span class="small muted">هامش الخطأ الآن ±${r0(pred.cv*100)}٪ من الارتفاع</span></div>
+  <div class="chart">${chartSVG(series,{label:"المنحنى المتوقع"})}</div>
+  <div class="row small"><span class="pill" style="background:transparent;border:1px solid var(--line)"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--curve)" stroke-width="3"/></svg> كما هي</span>${combo?`<span class="pill" style="background:transparent;border:1px solid var(--line)"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--curve2)" stroke-width="3" stroke-dasharray="5 4"/></svg> مع كل التعديلات: ${r0(combo.peak)} <span class="pill ${zc[0]}">${zc[1]}</span></span>`:""}</div>
+  <div class="kv"><div><small>القمة</small><b>${r0(pred.peak)}</b></div><div><small>وقت القمة</small><b>${r0(pred.tp)} د</b></div><div><small>الارتفاع</small><b>+${r0(pred.rise)}</b></div><div><small>بعد ساعتين</small><b>${r0(valAt(pred.curve,120))}</b></div></div></div>
+  ${vs.length?`<div class="card"><h3>كل خطوة كم تنزّل القمة</h3><ul class="actions">${vs.map(a=>`<li><span class="pill ok">−${r0(a.gain)}</span><div><b>${esc(a.label)}</b><div class="small muted">${esc(a.detail)}</div></div><span class="small muted num">${r0(a.peak)}</span></li>`).join("")}</ul>
+  ${careful?'<p class="small muted">ما اقترحنا تقليل النشويات لأن أدويتك ممكن تسبب هبوط إذا قلّت الكمية بدون تعديل من الطبيب.</p>':""}</div>`:""}
+  ${careful&&S.ctx.walk!=="0"?'<div class="alert warn small">المشي بعد الأكل مع الإنسولين أو السلفونيل يوريا ممكن ينزّل السكر زيادة. خلّ معك تمر أو عصير صغير.</div>':""}
+  <div class="card"><h3>احفظ وقِس</h3><p class="small muted">أفضل وقت تقيس فيه: بعد <b class="num">${tMeasure}</b> دقيقة من أول لقمة.</p>
+  <div class="row"><button class="primary" id="save-meal" ${S.meal.example?"disabled":""}>احفظ الوجبة في السجل</button>${S.meal.example?'<span class="small muted">صوّر أو أضف وجبتك أولاً</span>':""}</div></div>`;
+  $("#speak").onclick=()=>{try{const u=new SpeechSynthesisUtterance(doTxt);u.lang="ar-SA";speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){toast("الصوت غير متاح في هذا المتصفح")}};
+  const sv=$("#save-meal");if(sv)sv.onclick=()=>{const L=S.lastPred,id="meal-"+Date.now(),pack=p=>p&&{peak:r0(p.peak),tp:r0(p.tp),g0:r0(p.g0),curve:p.curve.filter(x=>x[0]%15===0).map(x=>[x[0],r0(x[1])])};
+    const rec={id,ts:Date.now(),summary:S.meal.summary||S.meal.items.map(i=>i.name).join("، "),items:S.meal.items.map(it=>({key:it.key,name:it.name,grams:r0(it.grams*(it.personal?1:S.share))})),
+      ctx:{...S.ctx},pred:pack(L.pred),combo:pack(L.combo),advice:L.vs.map(v=>v.label),measureAt:L.tMeasure,readings:[],sAtPredict:L.model.s};
+    if(Store.saveMeal(rec)){toast("انحفظت. ارجع للسجل بعد "+L.tMeasure+" دقيقة وأدخل قراءتك");sv.disabled=true}}}
+
+/* ===== photo analysis (via Worker) ===== */
+const aiOn=!!AI_ENDPOINT;
+$("#ai-status").textContent=aiOn?"":"تحليل الصور يحتاج ربط خادم التحليل. حالياً ابحث عن الأصناف وأضفها تحت.";
+$("#pick").addEventListener("click",()=>$("#file").click());
+$("#file").addEventListener("change",()=>{const f=$("#file").files[0];if(!f)return;S.img=f;const im=$("#meal-img");im.src=URL.createObjectURL(f);im.hidden=false;$("#drop-txt").hidden=true;$("#analyze").disabled=!aiOn});
+function shrink(file){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const k=Math.min(1,1280/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=r0(img.width*k);c.height=r0(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",0.82).split(",")[1])};img.onerror=rej;img.src=URL.createObjectURL(file)})}
+$("#analyze").addEventListener("click",async()=>{if(!aiOn||!S.img)return;$("#analyze").disabled=true;$("#ai-status").innerHTML='<span class="spinner"></span> يحلل الصورة…';
+  try{const b64=await shrink(S.img);const r=await fetch(AI_ENDPOINT,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({image:b64,mediaType:"image/jpeg",foods:Object.fromEntries(Object.entries(FOODS).map(([k,f])=>[k,f.ar]))})});
+    if(!r.ok)throw new Error(r.status===429?"rate":"http");const out=await r.json();
+    const items=(Array.isArray(out.items)?out.items:[]).map(x=>{const g=Math.max(0,Number(x.grams)||0),conf=Math.max(0,Math.min(1,Number(x.confidence)||0.5));
+      if(FOODS[x.key])return mk(x.key,g,{conf});
+      const d={ar:String(x.name_ar||"صنف"),c:+x.carb_per100||0,f:+x.fiber_per100||0,p:+x.protein_per100||0,fat:+x.fat_per100||0,gi:Math.min(100,+x.gi||60),liquid:!!x.liquid,src:"AI",unit:["حصة",Math.max(20,r0(g/2)||50)]};
+      return {key:"other",name:d.ar,grams:g,data:d,personal:false,conf}}).filter(i=>i.grams>0);
+    if(!items.length){$("#ai-status").textContent="ما تعرّفت على أكل في الصورة. جرّب صورة أوضح من فوق.";return}
+    S.meal={items,shared:!!out.shared,summary:String(out.summary_ar||""),example:false};S.share=out.shared?0.33:1;
+    $("#ai-status").textContent=(out.summary_ar?out.summary_ar+". ":"")+(out.notes_ar||"")+" راجع الكميات وعدّلها.";refreshMeal();$("#items-card").scrollIntoView({behavior:"smooth",block:"start"})}
+  catch(e){$("#ai-status").textContent=e.message==="rate"?"وصلت للحد اليومي للتحليل. أضف الأصناف يدوياً.":"تعذّر التحليل. تأكد من الاتصال، أو أضف الأصناف يدوياً."}
+  finally{$("#analyze").disabled=false}});
+
+/* ===== history + learning ===== */
+function renderHistory(){S.meals=Store.meals();const md=S.model||priorModel(S.profile||EXAMPLE_PROFILE);
+  const rows=S.meals.flatMap(m=>m.readings.map(r=>({m,r}))),errs=rows.map(({m,r})=>Math.abs(r.expected-r.v)).filter(isFinite);
+  const mae=errs.length?errs.reduce((a,b)=>a+b,0)/errs.length:null;
+  $("#acc-kv").innerHTML=`<div><small>وجبات</small><b>${S.meals.length}</b></div><div><small>قراءات</small><b>${rows.length}</b></div><div><small>متوسط خطأ التوقع</small><b>${mae!=null?"±"+r0(mae):"—"}</b></div><div><small>حساسيتك الحالية</small><b>${r1(md.s)}</b></div>`;
+  if(!S.meals.length){$("#hist").innerHTML=`<p class="muted">ما فيه وجبات محفوظة. احفظ أول وجبة من «وجبتي».</p>`;return}
+  $("#hist").innerHTML=S.meals.map(m=>{const d=new Date(m.ts);return `<div class="mealcard"><div class="top"><b>${esc(m.summary)}</b><span class="small muted num">${d.toLocaleDateString("ar-SA-u-ca-gregory",{day:"numeric",month:"short"})} · ${d.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"})}</span></div>
+    <div class="small">القمة المتوقعة <span class="num">${m.pred.peak}</span> عند <span class="num">${m.pred.tp}</span> د${m.combo?` · مع التعديلات <span class="num">${m.combo.peak}</span>`:""}</div>
+    ${m.readings.length?`<div class="small">قراءاتك: ${m.readings.map(r=>`<span class="num">${r.v}</span> بعد ${r.t} د <span class="muted">(المتوقع ${r.expected}${r.followed?"، طبّقت الخطوات":""})</span>`).join("، ")}</div>`:""}
+    <div class="reading-row"><select data-id="${m.id}" class="rt" aria-label="بعد كم دقيقة"><option value="60">بعد ٦٠ د</option><option value="90" ${m.measureAt===90?"selected":""}>بعد ٩٠ د</option><option value="120" ${m.measureAt===120?"selected":""}>بعد ١٢٠ د</option></select>
+    ${m.combo?`<select data-id="${m.id}" class="rf" aria-label="هل طبقت الخطوات"><option value="0">ما طبّقت التعديلات</option><option value="1">طبّقت التعديلات</option></select>`:""}
+    <input data-id="${m.id}" class="rv" type="number" inputmode="numeric" placeholder="القراءة" aria-label="القراءة" style="width:110px"><button data-id="${m.id}" class="rb">أضف</button></div></div>`}).join("");
+  $$(".rb").forEach(b=>b.onclick=()=>addReading(b.dataset.id))}
+function addReading(id){const m=S.meals.find(x=>x.id===id),v=parseFloat($(`.rv[data-id="${id}"]`).value),t=+$(`.rt[data-id="${id}"]`).value,fsel=$(`.rf[data-id="${id}"]`),followed=!!(fsel&&fsel.value==="1");
+  if(!isFinite(v)||v<30||v>600){toast("أدخل قراءة صحيحة");return}
+  if(v<70)toast("قراءة تحت ٧٠: هبوط. خذ ١٥ جم سكر سريع وأعد القياس بعد ربع ساعة.");else if(v>=300)toast("قراءة ٣٠٠ أو أكثر: تواصل مع طبيبك.");
+  const P=followed&&m.combo?m.combo:m.pred,expected=r0(valAt(P.curve,t));
+  m.readings.push({t,v,followed,expected,ts:Date.now()});Store.saveMeal(m);
+  const md=S.model||priorModel(S.profile||EXAMPLE_PROFILE),predRise=expected-P.g0,obsRise=v-P.g0;
+  if(predRise>8&&v>=70){const ratio=Math.max(0.4,Math.min(2.5,obsRise/predRise)),w=1/(md.n+4);md.s=Math.exp(Math.log(md.s)+w*Math.log(Math.max(0.05,ratio)))}
+  const a=m.readings.find(r=>r.t===60),b=m.readings.find(r=>r.t===120);if(a&&b&&!m.tpAdjusted){if(b.v>a.v)md.tpG=Math.min(110,md.tpG+6);else if(b.v<a.v-30)md.tpG=Math.max(20,md.tpG-4);m.tpAdjusted=true;Store.saveMeal(m)}
+  md.n=(md.n||0)+1;md.log=(md.log||[]).slice(-60).concat([{ts:Date.now(),t,v,expected}]);S.model=md;Store.set("model",md);toast("انضافت القراءة وتحدّث النموذج");renderHistory()}
+$("#exp").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(Store.all(),null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="glucose-backup-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove()});
+$("#imp-btn").addEventListener("click",()=>$("#imp").click());
+$("#imp").addEventListener("change",async()=>{try{const d=JSON.parse(await $("#imp").files[0].text());if(!d||typeof d!=="object")throw 0;
+  for(const k of ["profile","model","calib"])if(d[k])Store.set(k,d[k]);if(Array.isArray(d.meals))Store.set("meals",d.meals);toast("رجعت بياناتك");boot()}catch(e){toast("الملف غير صالح")}});
+$("#wipe").addEventListener("click",()=>$("#wipe-confirm").hidden=false);$("#wipe-no").addEventListener("click",()=>$("#wipe-confirm").hidden=true);
+$("#wipe-yes").addEventListener("click",()=>{Store.wipe();$("#wipe-confirm").hidden=true;S.profile=S.model=S.calib=null;S.meal=null;toast("انمسحت بياناتك");boot()});
+
+/* ===== home + sources ===== */
+function renderHome(){const p=S.profile,md=S.model;if(p&&p.name)$("#hello").textContent=`أهلاً ${p.name}، صوّر صحنك قبل ما تاكل`;
+  const st=[["ملفي",!!p,"#profile","بياناتك وأدويتك وبوابة الأمان"],["المعايرة",!!(md&&md.calibrated),"#calibration","٥٠ جم جلوكوز وخمس قراءات"],["أول وجبة",S.meals.length>0,"#meal","صورة، توقع، وخطوة تسطّح القمة"],["أول قراءة",S.meals.some(m=>m.readings.length),"#history","النموذج يتعلم من جسمك"]];
+  $("#progress").innerHTML=st.map(([t,d,h,x])=>`<a class="step" href="${h}" style="text-decoration:none;color:inherit"><span class="st"><span class="pill ${d?"ok":""}">${d?"تم":"التالي"}</span></span><b>${t}</b><span class="small muted">${x}</span></a>`).join("");
+  const m=md||priorModel(p||EXAMPLE_PROFILE);
+  $("#model-kv").innerHTML=`<div><small>سكر الصيام</small><b>${r0(m.g0)}</b></div><div><small>الحساسية لكل جرام</small><b>${r1(m.s)}</b></div><div><small>قمتك مع الجلوكوز</small><b>${r0(m.tpG)} د</b></div><div><small>قراءات تعلّم منها</small><b>${m.n||0}</b></div>`;
+  $("#model-note").textContent=!p?"أرقام ملف مثال. احفظ بياناتك عشان تبدأ.":m.calibrated?"النموذج معاير على قراءاتك.":"النموذج تقدير أولي من بياناتك. المعايرة تقلل الخطأ."}
+function renderSources(){$("#db-table").innerHTML=`<thead><tr><th>الصنف</th><th>كربوهيدرات</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>GI</th><th>المصدر</th></tr></thead><tbody>${Object.values(FOODS).map(f=>`<tr><td>${esc(f.ar)}</td><td class="num">${f.c}</td><td class="num">${f.f}</td><td class="num">${f.p}</td><td class="num">${f.fat}</td><td class="num">${f.gi}${f.src==="QD"?"":"*"}</td><td class="small">${esc(SRC_NAME[f.src])}</td></tr>`).join("")}</tbody>`;
+  const L=[["الأطباق السعودية","Basaqr et al., Front Nutr 2025","https://pmc.ncbi.nlm.nih.gov/articles/PMC12641437/","ماكروز ٢٥ طبق تقليدي من ٧٥ وصفة منزلية."],
+   ["التمور","AlGeffari et al., Ann Saudi Med 2016","https://pmc.ncbi.nlm.nih.gov/articles/PMC6074203/","المؤشر الجلايسيمي لـ١٧ صنف تمر من القصيم."],
+   ["المعايرة","Buchanan & McKiddie, Diabetologia 1967","https://link.springer.com/article/10.1007/BF01228083","استجابة الإنسولين والسكر لـ٥٠ جم جلوكوز، ومرجع الحساسية الأولية."],
+   ["ترتيب الأكل","Shukla et al., Diabetes Care 2015","https://doi.org/10.2337/dc15-0429","النشويات آخر الوجبة تخفض قمة السكر بشكل واضح."],
+   ["المشي","Reynolds et al., Diabetologia 2016","https://doi.org/10.1007/s00125-016-4085-2","مشي ١٠ دقائق بعد الوجبات أفضل من ٣٠ دقيقة في أي وقت."],
+   ["المرحلة الجاية","جداول تركيب الأغذية السعودية — SFDA","https://www.sfda.gov.sa/en/news/5521984","١٣٠ طبق محلّل مخبرياً، تستبدل التقديرات."]];
+  $("#src-list").innerHTML=L.map(([t,n,u,d])=>`<div class="src"><span class="pill" style="align-self:flex-start">${t}</span><a href="${u}" target="_blank" rel="noopener">${esc(n)}</a><span class="small muted">${esc(d)}</span></div>`).join("")}
+
+/* ===== boot ===== */
+function boot(){S.profile=Store.get("profile");S.calib=Store.get("calib");S.model=Store.get("model")||(S.profile?priorModel(S.profile):null);S.meals=Store.meals();
+  fillProfile(S.profile||EXAMPLE_PROFILE);renderCalib();if(!S.meal)S.meal=exampleMeal();refreshMeal();renderHome();route()}
+setSeg("ord-seg","order");setSeg("walk-seg","walk");setSeg("time-seg","time");renderSources();boot();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
