@@ -277,6 +277,15 @@ footer.foot{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-i
     </div>
   </div>
   <div id="result"></div>
+  <div class="card">
+    <h3>قارن قبل ما تختار</h3>
+    <p class="small muted">محتار بين خيارين في المطعم أو البيت؟ اختر الاثنين وشوف أيهم أخف على سكرك.</p>
+    <div class="grid2">
+      <div class="row"><select id="cmp-a" style="flex:2 1 160px" aria-label="الخيار الأول"></select><input id="cmp-ag" type="number" inputmode="numeric" aria-label="جرامات الخيار الأول" style="width:90px"></div>
+      <div class="row"><select id="cmp-b" style="flex:2 1 160px" aria-label="الخيار الثاني"></select><input id="cmp-bg" type="number" inputmode="numeric" aria-label="جرامات الخيار الثاني" style="width:90px"></div>
+    </div>
+    <div id="cmp-out"></div>
+  </div>
 </section>
 
 <section class="view" id="v-history" hidden>
@@ -363,7 +372,11 @@ const FOODS = {
   oats:{ar:"شوفان مطبوخ بالحليب",c:12,f:1.7,p:4.5,fat:2.5,gi:55,src:"STD",unit:["صحن",250]}
 };
 const SRC_NAME={F25:"Basaqr وآخرون ٢٠٢٥",QD:"الجفاري وآخرون ٢٠١٦ (القصيم)",STD:"قيم قياسية — تقدير",AI:"تقدير تحليل الصورة"};
-const GLUCOSE_DELAY=15; // solid food peaks later than a glucose drink
+const GLUCOSE_DELAY=15;
+// lighter swaps (January-style "better alternatives"), grams of the swap per 100 g of original
+const SWAPS={rice_white:["hasawi",1.6,"رز حساوي بدل الأبيض (نفس كمية النشويات تقريباً)"],tea_sweet:["coffee_ar",0.5,"قهوة عربية بدل الشاي بسكر"],juice:["laban",1,"لبن بدل العصير"],soda:["laban",0.7,"لبن أو ماء بدل الغازي"],
+ kunafa:["dates_sukkari",0.25,"تمرتين سكري بدل الكنافة"],basbousa:["dates_sukkari",0.3,"تمرتين سكري بدل البسبوسة"],luqaimat:["dates_sukkari",0.25,"تمرتين سكري بدل اللقيمات"],
+ dates_khalas:["dates_sukkari",1,"سكري بدل خلاص (مؤشر أقل)"],fries:["salad",1,"سلطة بدل البطاطس"],saleeq:["jareesh",0.9,"جريش بدل السليق"],masoob:["oats",1,"شوفان بدل المعصوب"]}; // solid food peaks later than a glucose drink
 
 /* ===== helpers ===== */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -539,8 +552,10 @@ $("#add-btn").addEventListener("click",addSearch);$("#search").addEventListener(
 $("#pre").addEventListener("input",()=>refreshMeal());
 function renderItems(){const M=S.meal;$("#meal-example").hidden=!M.example;$("#shared").hidden=!M.shared;setShare();
   $("#items").innerHTML=M.items.length?M.items.map((it,i)=>{const g=it.grams*(it.personal?1:S.share),u=it.data.unit||["حصة",100];
+    const gl=Math.max(0,it.data.c-it.data.f)*g/100*it.data.gi/100, lt=gl<8?["ok","خفيف"]:gl<20?["warn","متوسط"]:["bad","ثقيل"];
+    const light=`<span class="pill conf ${lt[0]}">${lt[1]} على السكر</span>`;
     const conf=it.conf!=null?`<span class="pill conf ${it.conf>=0.7?"ok":it.conf>=0.4?"warn":"bad"}">ثقة ${r0(it.conf*100)}٪</span>`:"";
-    return `<div class="item"><div style="min-width:0"><div class="nm">${esc(it.name)} ${conf}</div><div class="meta">${esc(SRC_NAME[it.data.src]||"")} · نشويات متاحة <span class="num">${r0(Math.max(0,it.data.c-it.data.f)*g/100)}</span> جم · ${esc(u[0])} ≈ ${u[1]} جم${M.shared&&!it.personal?" · بعد احتساب نصيبك":""}</div></div>
+    return `<div class="item"><div style="min-width:0"><div class="nm">${esc(it.name)} ${light} ${conf}</div><div class="meta">${esc(SRC_NAME[it.data.src]||"")} · نشويات متاحة <span class="num">${r0(Math.max(0,it.data.c-it.data.f)*g/100)}</span> جم · ${esc(u[0])} ≈ ${u[1]} جم${M.shared&&!it.personal?" · بعد احتساب نصيبك":""}</div></div>
     <div class="stepper"><button type="button" aria-label="أنقص" data-i="${i}" data-d="-1">−</button><output class="num">${r0(it.grams)} جم</output><button type="button" aria-label="زِد" data-i="${i}" data-d="1">+</button><button type="button" class="ghost" aria-label="احذف" data-i="${i}" data-d="x">✕</button></div></div>`}).join(""):`<p class="muted">ما فيه أصناف. صوّر وجبتك أو ابحث عن صنف.</p>`;
   $$("#items button").forEach(b=>b.onclick=()=>{const i=+b.dataset.i,it=M.items[i];if(b.dataset.d==="x")M.items.splice(i,1);else{const step=Math.max(10,r0((it.data.unit?.[1]||100)/4));it.grams=Math.max(0,it.grams+step*+b.dataset.d)}M.example=false;refreshMeal()})}
 function variants(items,ctx,careful){
@@ -548,6 +563,8 @@ function variants(items,ctx,careful){
   if(ctx.order!=="veg")out.push({id:"order",label:"ابدأ بالسلطة واللحم، وخلّ الرز والخبز آخر شي",detail:"كل الخضار والبروتين أول ١٠ دقائق، بعدها النشويات.",ctx:{order:"veg"}});
   if(ctx.walk==="0")out.push({id:"walk",label:"امشِ ١٠ دقائق خلال ربع ساعة من آخر لقمة",detail:"داخل البيت أو الممر أو للمسجد. مشي خفيف يكفي.",ctx:{walk:"10"}});
   if(items.some(it=>it.data.liquid&&it.data.gi>0))out.push({id:"drink",label:"بدّل المشروب المحلّى بماء أو لبن",detail:"السكر السائل يرفع بسرعة ولا يفيد معه ترتيب الأكل.",map:it=>it.data.liquid&&it.data.gi>0?{...it,grams:0}:it});
+  for(const it of items){const sw=SWAPS[it.key];if(!sw||it.grams<=0)continue;const [to,k,label]=sw;
+    out.push({id:"swap-"+it.key,label:"بدّل: "+label,detail:`نفس الوجبة، بس ${FOODS[to].ar} تقريباً ${Math.round(it.grams*k)} جم بدل ${it.name}.`,map:x=>x===it?{...mk(to,x.grams*k),personal:x.personal}:x})}
   if(!careful&&items.some(it=>it.data.c-it.data.f>10&&!it.data.liquid))out.push({id:"less",label:"قلّل النشويات ربعاً (رز، خبز، حلا)",detail:"من صحن كامل لثلاثة أرباع، وزوّد السلطة أو البروتين بدالها.",map:it=>(it.data.c-it.data.f>10&&!it.data.liquid)?{...it,grams:it.grams*0.75}:it});
   return out}
 function applyVariants(items,ctx,vs){let c={...ctx},its=items;for(const v of vs){if(v.ctx)c={...c,...v.ctx};if(v.map)its=its.map(v.map)}return [its,c]}
@@ -561,7 +578,8 @@ function refreshMeal(){if(!S.meal)S.meal=exampleMeal();renderItems();
   const careful=!!(prof.meds&&(prof.meds.ins||prof.meds.su));
   const pred=predict(S.meal.items,S.share,S.ctx,model,prof,g0),z=zone(pred.peak);
   const vs=variants(S.meal.items,S.ctx,careful).map(v=>{const [its,c]=applyVariants(S.meal.items,S.ctx,[v]);const p=predict(its,S.share,c,model,prof,g0);return {...v,gain:pred.peak-p.peak,peak:p.peak}}).filter(v=>v.gain>=3).sort((a,b)=>b.gain-a.gain);
-  const [cItems,cCtx]=applyVariants(S.meal.items,S.ctx,vs);const combo=vs.length?predict(cItems,S.share,cCtx,model,prof,g0):null,zc=combo&&zone(combo.peak);
+  const pick=[];for(const v of vs){if(v.id.startsWith("swap-")&&pick.some(x=>x.id==="drink"||x.id==="less"||x.id.startsWith("swap-")))continue;if((v.id==="drink"||v.id==="less")&&pick.some(x=>x.id.startsWith("swap-")))continue;pick.push(v)}
+  const [cItems,cCtx]=applyVariants(S.meal.items,S.ctx,pick);const combo=vs.length?predict(cItems,S.share,cCtx,model,prof,g0):null,zc=combo&&zone(combo.peak);
   const doTxt=z[0]==="ok"?"وجبتك في الحدود الآمنة. استمر على نفس الترتيب.":vs[0]?vs[0].label+".":"الوجبة ثقيلة على السكر. خفف الكمية في المرة الجاية.";
   const series=[{pts:pred.curve,color:"var(--curve)",band:pred.cv,g0:pred.g0,peak:[pred.tp,pred.peak]}];
   if(combo)series.push({pts:combo.curve,color:"var(--curve2)",dash:"6 5",g0:pred.g0,peak:[combo.tp,combo.peak]});
@@ -587,6 +605,20 @@ function refreshMeal(){if(!S.meal)S.meal=exampleMeal();renderItems();
       ctx:{...S.ctx},pred:pack(L.pred),combo:pack(L.combo),advice:L.vs.map(v=>v.label),measureAt:L.tMeasure,readings:[],sAtPredict:L.model.s};
     if(Store.saveMeal(rec)){toast("انحفظت. ارجع للسجل بعد "+L.tMeasure+" دقيقة وأدخل قراءتك");sv.disabled=true}}}
 
+/* ===== compare two options ===== */
+(function(){const opts=Object.entries(FOODS).filter(([k,f])=>f.c>3).map(([k,f])=>`<option value="${k}">${esc(f.ar)}</option>`).join("");
+  $("#cmp-a").innerHTML=opts;$("#cmp-b").innerHTML=opts;$("#cmp-a").value="kabsa_chicken";$("#cmp-b").value="jareesh";
+  const sync=(sel,inp)=>{inp.value=FOODS[sel.value].unit[1]};sync($("#cmp-a"),$("#cmp-ag"));sync($("#cmp-b"),$("#cmp-bg"));
+  $("#cmp-a").onchange=()=>{sync($("#cmp-a"),$("#cmp-ag"));renderCompare()};$("#cmp-b").onchange=()=>{sync($("#cmp-b"),$("#cmp-bg"));renderCompare()};
+  $("#cmp-ag").oninput=renderCompare;$("#cmp-bg").oninput=renderCompare})();
+function renderCompare(){const prof=S.profile||EXAMPLE_PROFILE,model=S.model||priorModel(prof);if(gateOf(prof).level==="stop"){$("#cmp-out").innerHTML="";return}
+  const one=(k,g)=>predict([{...mk(k,Math.max(0,+g||0)),personal:true}],1,S.ctx,model,prof);
+  const A=one($("#cmp-a").value,$("#cmp-ag").value),B=one($("#cmp-b").value,$("#cmp-bg").value),na=FOODS[$("#cmp-a").value].ar,nb=FOODS[$("#cmp-b").value].ar;
+  const better=A.peak<=B.peak?na:nb,diff=Math.abs(A.peak-B.peak);
+  $("#cmp-out").innerHTML=`<div class="chart">${chartSVG([{pts:A.curve,color:"var(--curve)",g0:A.g0,peak:[A.tp,A.peak]},{pts:B.curve,color:"var(--accent)",dash:"6 5",g0:B.g0,peak:[B.tp,B.peak]}],{label:"مقارنة خيارين"})}</div>
+  <div class="row small"><span class="pill" style="background:transparent;border:1px solid var(--line)"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--curve)" stroke-width="3"/></svg> ${esc(na)}: ${r0(A.peak)}</span><span class="pill" style="background:transparent;border:1px solid var(--line)"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--accent)" stroke-width="3" stroke-dasharray="5 4"/></svg> ${esc(nb)}: ${r0(B.peak)}</span></div>
+  <p>${diff<5?"الخياران متقاربين على سكرك.":`<b>${esc(better)}</b> أخف على سكرك بفرق تقريباً <span class="num">${r0(diff)}</span> ملجم/دسل في القمة.`}</p>`}
+
 /* ===== photo analysis (via Worker) ===== */
 const aiOn=!!AI_ENDPOINT;
 $("#ai-status").textContent=aiOn?"":"تحليل الصور يحتاج ربط خادم التحليل. حالياً ابحث عن الأصناف وأضفها تحت.";
@@ -607,10 +639,13 @@ $("#analyze").addEventListener("click",async()=>{if(!aiOn||!S.img)return;$("#ana
   finally{$("#analyze").disabled=false}});
 
 /* ===== history + learning ===== */
-function renderHistory(){S.meals=Store.meals();const md=S.model||priorModel(S.profile||EXAMPLE_PROFILE);
+function renderHistory(){S.meals=Store.meals();const oldI=$("#insight");if(oldI)oldI.remove();const md=S.model||priorModel(S.profile||EXAMPLE_PROFILE);
   const rows=S.meals.flatMap(m=>m.readings.map(r=>({m,r}))),errs=rows.map(({m,r})=>Math.abs(r.expected-r.v)).filter(isFinite);
   const mae=errs.length?errs.reduce((a,b)=>a+b,0)/errs.length:null;
   $("#acc-kv").innerHTML=`<div><small>وجبات</small><b>${S.meals.length}</b></div><div><small>قراءات</small><b>${rows.length}</b></div><div><small>متوسط خطأ التوقع</small><b>${mae!=null?"±"+r0(mae):"—"}</b></div><div><small>حساسيتك الحالية</small><b>${r1(md.s)}</b></div>`;
+  const byFood={};for(const m of S.meals)for(const r of m.readings){for(const it of m.items){(byFood[it.name]=byFood[it.name]||[]).push(r.v-(m.pred.g0||0))}}
+  const top=Object.entries(byFood).map(([n,a])=>[n,a.reduce((x,y)=>x+y,0)/a.length,a.length]).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  $("#acc-kv").insertAdjacentHTML("afterend",top.length?`<div id="insight" class="alert warn small"><b>أكثر الأصناف رفعاً لسكرك حسب قراءاتك</b>${top.map(([n,v,c])=>`<span>${esc(n)}: متوسط +${r0(v)} <span class="muted">(${c} قراءة)</span></span>`).join("")}</div>`:"");
   if(!S.meals.length){$("#hist").innerHTML=`<p class="muted">ما فيه وجبات محفوظة. احفظ أول وجبة من «وجبتي».</p>`;return}
   $("#hist").innerHTML=S.meals.map(m=>{const d=new Date(m.ts);return `<div class="mealcard"><div class="top"><b>${esc(m.summary)}</b><span class="small muted num">${d.toLocaleDateString("ar-SA-u-ca-gregory",{day:"numeric",month:"short"})} · ${d.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"})}</span></div>
     <div class="small">القمة المتوقعة <span class="num">${m.pred.peak}</span> عند <span class="num">${m.pred.tp}</span> د${m.combo?` · مع التعديلات <span class="num">${m.combo.peak}</span>`:""}</div>
@@ -653,7 +688,7 @@ function renderSources(){$("#db-table").innerHTML=`<thead><tr><th>الصنف</th
 
 /* ===== boot ===== */
 function boot(){S.profile=Store.get("profile");S.calib=Store.get("calib");S.model=Store.get("model")||(S.profile?priorModel(S.profile):null);S.meals=Store.meals();
-  fillProfile(S.profile||EXAMPLE_PROFILE);renderCalib();if(!S.meal)S.meal=exampleMeal();refreshMeal();renderHome();route()}
+  fillProfile(S.profile||EXAMPLE_PROFILE);renderCalib();if(!S.meal)S.meal=exampleMeal();refreshMeal();renderCompare();renderHome();route()}
 setSeg("ord-seg","order");setSeg("walk-seg","walk");setSeg("time-seg","time");renderSources();boot();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
