@@ -266,14 +266,14 @@ function renderStart() {
 const AUTH = {step: "email", email: "", err: ""};
 function renderAuth() {
   const A = AUTH;
-  const body = A.step === "email" ? `<h2>وش إيميلك؟</h2><p class="sub">نرسل لك رمز من ٦ أرقام. بنفس الإيميل تدخل من أي جوال أو كمبيوتر وتلقى بياناتك.</p>
+  const body = A.step === "email" ? `<h2>وش إيميلك؟</h2><p class="sub">نرسل لك رسالة دخول على إيميلك، بدون كلمة مرور. بنفس الإيميل تدخل من أي جوال أو كمبيوتر وتلقى بياناتك.</p>
       <div class="field"><label for="au-e">الإيميل</label><input id="au-e" class="input" type="email" inputmode="email" autocomplete="email" value="${esc(A.email)}" placeholder="name@example.com" style="direction:ltr;text-align:right"></div>`
-    : `<h2>اكتب الرمز</h2><p class="sub">أرسلنا رمز إلى <b class="ltr">${esc(A.email)}</b>. إذا وصلك رابط بدل الرمز، اضغطه من نفس الجهاز.</p>
+    : `<h2>افتح إيميلك</h2><p class="sub">أرسلنا رسالة إلى <b class="ltr">${esc(A.email)}</b>. اضغط الرابط اللي فيها من <b>نفس الجهاز</b> وتدخل مباشرة. إذا وصلك رمز من ٦ أرقام اكتبه هنا. (شيك على الرسائل غير المرغوبة إذا ما لقيتها)</p>
       <div class="otp" role="group" aria-label="رمز الدخول">${[0, 1, 2, 3, 4, 5].map(i => `<input inputmode="numeric" maxlength="1" data-i="${i}" aria-label="رقم ${i + 1}" autocomplete="${i ? "off" : "one-time-code"}">`).join("")}</div>
       <button class="link" id="au-resend" style="align-self:flex-start">ما وصلني، أرسل مرة ثانية</button>`;
   $("#flow").innerHTML = `<div class="flowwrap"><div class="flowhead"><button class="iconbtn" id="au-back" aria-label="رجوع">${ic("back")}</button></div>
     <div class="flowbody">${body}${A.err ? `<div class="note bad">${ic("x")}<span>${esc(A.err)}</span></div>` : ""}<p class="xs muted">بياناتك الصحية خاصة بحسابك فقط، ومحمية بصلاحيات على مستوى كل مستخدم.</p></div>
-    <div class="flowfoot"><button class="btn primary block" id="au-go">${A.step === "email" ? "أرسل الرمز" : "دخول"}</button></div></div>`;
+    <div class="flowfoot"><button class="btn primary block" id="au-go">${A.step === "email" ? "أرسل رسالة الدخول" : "دخول بالرمز"}</button></div></div>`;
   const R = $("#flow");
   $("#au-back").onclick = () => { if (A.step === "code") { A.step = "email"; A.err = ""; renderAuth(); } else go("start"); };
   if (A.step === "email") { const e = $("#au-e"); setTimeout(() => e.focus(), 60); e.onkeydown = ev => { if (ev.key === "Enter") $("#au-go").click(); };

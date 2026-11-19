@@ -1,6 +1,5 @@
-/* Cloud sync (Supabase). Leave empty to run in device-only mode.
-   The publishable/anon key is meant to be public; access is protected by row-level security. */
+// Supabase project (publishable key — safe to be public; data is protected by row-level security)
 window.PGA_CONFIG = {
-  supabaseUrl: "",
-  supabaseKey: ""
+  supabaseUrl: "https://boplwkdgovutcxeaynnq.supabase.co",
+  supabaseKey: "sb_publishable_rZMm6ZjULTucwRLF_7apbg_Ka33qpVX"
 };
