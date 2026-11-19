@@ -72,13 +72,13 @@ const Cloud = {
       for (const m of S.meals) if (!cloudM.has(m.id)) await this.pushMeal(m);
       for (const r of S.readings) if (!cloudR.has(r.id)) await this.pushReading(r);
       S.meals.sort((a, b) => b.ts - a.ts); S.readings.sort((a, b) => b.ts - a.ts);
-      this.setState("ok"); return !!(pr && pr.profile);
+      this.setState("ok"); refreshCare(); return !!(pr && pr.profile);
     } catch (e) { this.setState("err"); return null; } },
   async safe(fn) { if (!this.user) return; try { await fn(); this.setState("ok"); } catch (e) { this.setState("err"); } }
 };
 
 /* ================= state ================= */
-const S = {profile: null, model: null, calib: null, calibRun: null, settings: {provider: "none", model: "gemini-3.8-flash"}, meals: [], readings: [], scan: null, foodQ: "", foodCat: "all", logFilter: "all", usda: null, guest: false};
+const S = {profile: null, model: null, calib: null, calibRun: null, settings: {provider: "cloud", model: "gemini-3.8-flash"}, meals: [], readings: [], scan: null, foodQ: "", foodCat: "all", logFilter: "all", usda: null, guest: false};
 async function loadAll() {
   [S.profile, S.model, S.calib, S.calibRun] = await Promise.all(["profile", "model", "calib", "calibRun"].map(k => Store.get(k)));
   S.settings = {...S.settings, ...(await Store.get("settings") || {})}; S.guest = !!(await Store.get("guest"));
@@ -116,7 +116,7 @@ function totals(items) {
     const l = avail * F.gi / 100; gl += l; if (F.liquid) liqGL += l; kcal += (F.kcal || (F.c * 4 + F.p * 4 + F.fat * 9)) * g / 100; }
   return {c, f, p, fat, gl, liqGL, kcal};
 }
-const FACT = {order: {carb: 1, mixed: 0.82, veg: 0.6}, walk: {"0": 1, "10": 0.88, "20": 0.82}, time: {morning: 1, noon: 1, evening: 1.08, iftar: 1.1}};
+const FACT = {order: {carb: 1, mixed: 0.82, veg: 0.6}, walk: {"0": 1, "10": 0.88, "20": 0.82}, time: {morning: 1, noon: 1, evening: 1.08, iftar: 1.1, suhoor: 1}};
 function predict(items, ctx, model, prof, g0over) {
   const T = totals(items), meds = (prof && prof.meds) || {}, solidGL = T.gl - T.liqGL, st = ctx.state || {};
   const mix = 1 / (1 + 0.004 * T.fat + 0.003 * T.p + 0.02 * T.f);
@@ -135,7 +135,7 @@ function gradeOf(p) { if (p.peak < 140 && p.rise < 35) return "A"; if (p.peak < 
 const GRADE_TXT = {A: "ممتازة على سكرك", B: "جيدة", C: "متوسطة", D: "ترفع السكر", E: "ترفع السكر كثير"};
 const GRADE_SCORE = {A: 96, B: 82, C: 64, D: 44, E: 24};
 const valAt = (curve, t) => curve.reduce((a, b) => Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a)[1];
-const autoTime = () => { const h = new Date().getHours(); return h >= 4 && h < 11 ? "morning" : h < 16 ? "noon" : "evening"; };
+const autoTime = () => { const h = new Date().getHours(); if (S.settings.ramadan) return h >= 16 && h < 21 ? "iftar" : h >= 0 && h < 5 ? "suhoor" : "evening"; return h >= 4 && h < 11 ? "morning" : h < 16 ? "noon" : "evening"; };
 function curModel() { return S.model || priorModel(S.profile || EXAMPLE); }
 const EXAMPLE = {name: "", age: 55, sex: "m", height: 170, weight: 88, status: "pre", meds: {}, cond: {}};
 
@@ -198,7 +198,7 @@ function ringSVG(val, size = 116, label = "") {
 }
 
 /* ================= router ================= */
-const MAIN = ["today", "log", "insights", "foods", "me"], FLOWS = ["start", "auth", "onboard", "scan", "calib"];
+const MAIN = ["today", "log", "insights", "foods", "me"], FLOWS = ["start", "auth", "onboard", "scan", "calib", "report"];
 let tickTimer = null;
 function go(h) { if (location.hash === "#" + h) route(); else location.hash = h; }
 function route() {
@@ -216,7 +216,7 @@ function route() {
   hydratePhotos(); window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);
-function renderFlow(h) { ({start: renderStart, auth: renderAuth, onboard: renderOnboard, scan: renderScan, calib: renderCalib})[h](); }
+function renderFlow(h) { ({start: renderStart, auth: renderAuth, onboard: renderOnboard, scan: renderScan, calib: renderCalib, report: renderReport})[h](); }
 async function hydratePhotos(root = document) { if (!Cloud.user) return; for (const el of $$("[data-photo-path]", root)) { const u = await Cloud.photoURL(el.dataset.photoPath).catch(() => null); if (u) { const img = document.createElement("img"); img.src = u; img.alt = ""; img.className = el.className; el.replaceWith(img); } } }
 
 /* ================= sheets ================= */
@@ -315,11 +315,12 @@ function viewToday() {
     <div class="topbar"><div><div class="eyebrow">${new Date().toLocaleDateString(LOC, {weekday: "long", day: "numeric", month: "long"})}</div><h1>${new Date().getHours() < 12 ? "صباح الخير" : "مساء الخير"}${p.name ? "، " + esc(firstName(p.name)) : ""}</h1></div>
       <a class="avatar" href="#me" aria-label="حسابي">${esc((p.name || "؟").trim().charAt(0) || "؟")}</a></div>
     <a href="#scan" class="btn primary block" style="min-height:66px;font-size:1.2rem">${ic("camera")} سجّل وجبتك الحين</a>
-    ${tasks}
+    ${careAlertHTML()}${tasks}${ramadanCardHTML()}
     <div class="hero"><div>${ringSVG(score, 112, "مؤشر اليوم")}</div>
       <div class="stats"><small>مؤشر وجبات اليوم من ١٠٠</small>
         <div class="stat"><b class="num">${today.length}</b> <small>وجبات</small> · <b class="num">${today.filter(m => mealPlanPred(m).peak < 140).length}</b> <small>تحت ١٤٠</small></div>
         <small>${score == null ? "يبدأ المؤشر مع أول وجبة تسجلها اليوم" : score >= 80 ? "يومك ممتاز، استمر" : score >= 60 ? "يوم مقبول، فيه مجال للتحسين" : "وجبات اليوم ثقيلة، جرّب البدائل"}</small></div></div>
+    ${macroCardHTML()}
     <div class="card"><div class="row between"><h3>وجبات اليوم</h3><a class="link" href="#log">السجل كامل</a></div>
       ${today.length ? `<div class="list">${today.map(mealRow).join("")}</div>` : `<p class="muted">ما سجلت أكل اليوم.</p>`}</div>
     <div class="grid2">
@@ -328,7 +329,7 @@ function viewToday() {
     </div>
     ${gateOf(p).level !== "ok" ? `<div class="note">${ic("shield")}<span>${esc(gateOf(p).msgs[0])}</span></div>` : ""}
   </section>`;
-  bindMealRows();
+  bindMealRows(); bindCare($("#view"));
   $$("[data-read]").forEach(b => b.onclick = () => openReadingSheet(S.meals.find(m => m.id === b.dataset.read)));
   $("[data-act=quickread]").onclick = () => openReadingSheet(null);
   $("[data-act=compare]").onclick = () => openCompare();
@@ -344,7 +345,7 @@ function bindMealRows(root = document) { $$("[data-meal]", root).forEach(b => b.
 /* ================= LOG ================= */
 function viewLog() {
   const f = S.logFilter;
-  const items = [...S.meals.map(m => ({t: "m", ts: m.ts, m})), ...S.readings.filter(r => !r.mealId).map(r => ({t: "r", ts: r.ts, r}))]
+  const items = [...S.meals.map(m => ({t: "m", ts: m.ts, m})), ...S.readings.filter(r => !r.mealId && r.kind !== "cgm").map(r => ({t: "r", ts: r.ts, r}))]
     .filter(x => f === "all" || (f === "meals" && x.t === "m") || (f === "readings" && x.t === "r")).sort((a, b) => b.ts - a.ts);
   const groups = []; for (const x of items) { const k = new Date(x.ts).toDateString(); let g = groups.find(g => g.k === k); if (!g) groups.push(g = {k, ts: x.ts, xs: []}); g.xs.push(x); }
   const KIND = {fasting: "صائم", pre: "قبل الأكل", post: "بعد الأكل", random: "عشوائية"};
@@ -386,8 +387,10 @@ function viewInsights() {
       `<p class="muted">تظهر بعد ما تدخل قراءات بعد الوجبات. نفس الأكل يأثر على كل شخص بشكل مختلف، وهنا تشوف تأثيره عليك أنت.</p>`}</div>
     <div class="card"><h3>قراءاتك آخر أسبوعين</h3>
       ${pts.length ? `<div class="chart">${curveSVG([{pts, color: "var(--brand2)", dots: true, line: false, r: 6}], {xmax: 140, ticks: [0, 35, 70, 105, 135], tickFmt: t => new Date(start + t / 10 * 864e5).toLocaleDateString(LOC, {day: "numeric", month: "numeric"}), label: "القراءات"})}</div>` : `<p class="muted">ما فيه قراءات بعد.</p>`}</div>
+    ${S.profile && (S.profile.weightLog || []).length >= 2 ? `<div class="card"><div class="row between"><h3>وزنك</h3><button class="link" data-a="wt">سجّل وزنك</button></div><div class="chart">${weightSVG(S.profile.weightLog)}</div></div>` : ""}
     ${S.calib ? `<div class="card"><h3>نتيجة اختبار المعايرة</h3><div class="chart">${calibChart(S.calib)}</div><p class="small muted">${esc(S.calib.shape || "")}</p></div>` : ""}
   </section>`;
+  $("[data-a=wt]") && ($("[data-a=wt]").onclick = openWeightSheet);
 }
 
 /* ================= FOODS ================= */
@@ -453,17 +456,28 @@ function viewMe() {
         <div class="grid2"><button class="btn sm" data-a="sync">زامن الحين</button><button class="btn sm ghost" data-a="out">${ic("logout")} خروج</button></div>`
       : Cloud.on ? `<div class="lrow"><span class="oi">${ic("cloud")}</span><span><b>بياناتك في هذا الجهاز فقط</b><br><span class="xs muted">سجّل بإيميلك عشان تنحفظ وتفتحها من أي جهاز</span></span><span></span></div><a class="btn primary block" href="#auth">${ic("mail")} سجّل بإيميلك</a>`
       : `<div class="lrow"><span class="oi">${ic("cloud")}</span><span><b>بياناتك في هذا الجهاز فقط</b><br><span class="xs muted">خذ نسخة احتياطية كل فترة</span></span><span></span></div>`}</div>
+    ${careCardHTML()}
     <div class="card"><div class="list">
+      <a class="lrow" href="#report"><span class="oi">${ic("book")}</span><span><b>تقرير للطبيب</b><br><span class="xs muted">PDF أو واتساب: قراءاتك ووجباتك والتراكمي التقديري</span></span>${ic("next")}</a>
+      <button class="lrow" data-a="wt"><span class="oi">${ic("scale")}</span><span><b>سجّل وزنك</b><br><span class="xs muted">${p.weight ? "آخر وزن " + p.weight + " كجم" : ""}</span></span>${ic("next")}</button>
+      <button class="lrow" data-a="ram"><span class="oi">${ic("moon")}</span><span><b>وضع رمضان</b><br><span class="xs muted">أوقات الإفطار والسحور ونصائح الصيام</span></span><span class="pill ${st.ramadan ? "gs-A gt-A" : ""}">${st.ramadan ? "مفعّل" : "مطفي"}</span></button>
+      <button class="lrow" data-a="libre"><span class="oi">${ic("sensor")}</span><span><b>استورد قراءات حساس ليبري</b><br><span class="xs muted">ملف CSV من موقع LibreView</span></span>${ic("next")}</button><input type="file" id="libref" accept=".csv,text/csv,text/plain" hidden>
       <a class="lrow" href="#calib"><span class="oi">${ic("flask")}</span><span><b>اختبار المعايرة</b><br><span class="xs muted">${S.calib ? "آخر اختبار " + fmtDay(S.calib.ts) : "ما سويته بعد"}</span></span>${ic("next")}</a>
-      <button class="lrow" data-a="ai"><span class="oi">${ic("spark")}</span><span><b>تحليل الصور</b><br><span class="xs muted">${st.provider === "gemini" && st.key ? "مفعّل" : st.provider === "worker" && st.endpoint ? "مفعّل (خادم خاص)" : "غير مفعّل"}</span></span>${ic("next")}</button>
+      <button class="lrow" data-a="ai"><span class="oi">${ic("spark")}</span><span><b>تحليل الصور</b><br><span class="xs muted">${st.provider === "gemini" && st.key ? "بمفتاحك الخاص" : st.provider === "worker" && st.endpoint ? "خادم خاص" : st.provider === "none" ? "غير مفعّل" : Cloud.user ? "تحليل التطبيق" : "يحتاج تسجيل بالإيميل"}</span></span>${ic("next")}</button>
       <button class="lrow" data-a="notif"><span class="oi">${ic("bell")}</span><span><b>تذكير القياس</b><br><span class="xs muted">${"Notification" in window ? (Notification.permission === "granted" ? "مفعّل" : "غير مفعّل") : "غير مدعوم"}</span></span>${ic("next")}</button>
       <button class="lrow" data-a="backup"><span class="oi">${ic("download")}</span><span><b>نسخة احتياطية</b><br><span class="xs muted">نزّل بياناتك كملف</span></span>${ic("next")}</button>
       <button class="lrow" data-a="method"><span class="oi">${ic("book")}</span><span><b>كيف يحسب التطبيق والمصادر</b></span>${ic("next")}</button>
     </div></div>
+    ${installCardHTML()}
     <div class="note">${ic("shield")}<span>أداة مساعدة لنمط الحياة، وليست تشخيصاً ولا بديلاً عن الطبيب. لا تغيّر جرعة أي دواء بناءً عليها.</span></div>
-    <p class="xs muted" style="text-align:center">Preventive Glucose AI · نسخة تجريبية ٤</p>
+    <p class="xs muted" style="text-align:center">Preventive Glucose AI · نسخة تجريبية ٥</p>
   </section>`;
   $("[data-a=edit]").onclick = () => { startOnboard(true); go("onboard"); };
+  bindCare($("#view")); bindInstall($("#view"));
+  $("[data-a=wt]").onclick = openWeightSheet;
+  $("[data-a=ram]").onclick = async () => { S.settings = {...S.settings, ramadan: !S.settings.ramadan}; await Store.set("settings", S.settings); toast(S.settings.ramadan ? "تفعّل وضع رمضان" : "انطفى وضع رمضان"); viewMe(); };
+  $("[data-a=libre]").onclick = () => $("#libref").click();
+  $("#libref").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const r = await importLibre(f); toast(`انضافت ${r.added} قراءة${r.linked ? `، وربطنا ${r.linked} بوجباتك` : ""}`); } catch (er) { toast("الملف مو بصيغة LibreView"); } };
   $("[data-a=ai]").onclick = openAISettings;
   $("[data-a=notif]").onclick = async () => { if (!("Notification" in window)) return toast("المتصفح ما يدعم التنبيهات"); const r = await Notification.requestPermission(); toast(r === "granted" ? "تفعّل التذكير" : "ما تفعّل التذكير"); viewMe(); };
   $("[data-a=backup]").onclick = openBackup; $("[data-a=method]").onclick = openMethod;
@@ -475,7 +489,7 @@ function viewMe() {
 function openAISettings() {
   const st = S.settings;
   openSheet(`<h2 style="font-size:1.35rem">تحليل الصور</h2><p class="muted">بدون تحليل تختار الأكل بالبحث. مع التحليل يتعرّف على صحنك ويقدّر الكميات.</p>
-    <div class="stack">${[["none", "بدون تحليل", "تختار الأكل بنفسك"], ["gemini", "Google Gemini (مجاني)", "مفتاح مجاني من Google"], ["worker", "خادم خاص", "Cloudflare Worker"]].map(([k, t, d]) => `<button class="opt" data-p="${k}" aria-pressed="${st.provider === k}"><span class="oi">${ic(k === "none" ? "search" : "spark")}</span><span><b>${t}</b><span>${d}</span></span><span class="tick">${ic("check")}</span></button>`).join("")}</div>
+    <div class="stack">${[["cloud", "تحليل التطبيق (مجاني)", Cloud.user ? "مع حسابك، ٤٠ صورة باليوم" : "يحتاج تسجيل بالإيميل"], ["none", "بدون تحليل", "تختار الأكل بنفسك"], ["gemini", "مفتاحي الخاص من Google", "للمتقدمين"], ["worker", "خادم خاص", "Cloudflare Worker"]].map(([k, t, d]) => `<button class="opt" data-p="${k}" aria-pressed="${st.provider === k}"><span class="oi">${ic(k === "none" ? "search" : k === "cloud" ? "cloud" : "spark")}</span><span><b>${t}</b><span>${d}</span></span><span class="tick">${ic("check")}</span></button>`).join("")}</div>
     <div id="pg" class="stack"></div>
     <div class="grid2"><button class="btn" data-a="test">جرّب</button><button class="btn primary" data-a="save">احفظ</button></div>
     <p class="xs muted">المفتاح ينحفظ في هذا الجهاز فقط ولا ينرفع لحسابك.</p>`, (sh, close) => {
@@ -552,8 +566,8 @@ function openReadingSheet(meal) {
         <button class="btn primary block" data-close>تمام</button>`); };
   });
 }
-async function saveReading({v, kind, meal, minutes, followed}) {
-  const r = {id: uid("r"), ts: Date.now(), v, kind};
+async function saveReading({v, kind, meal, minutes, followed, ts}) {
+  const r = {id: uid("r"), ts: ts || Date.now(), v, kind};
   if (meal) {
     const usePlan = followed === "yes" && meal.combo, P = usePlan ? meal.combo : followed === "part" && meal.combo ? {g0: meal.pred.g0, curve: meal.pred.curve.map((p, i) => [p[0], (p[1] + (meal.combo.curve[i] || p)[1]) / 2])} : meal.pred;
     const expected = r0(valAt(P.curve, minutes));
@@ -583,11 +597,13 @@ function openMealSheet(m) {
     <div class="card"><h3>محتوى الوجبة</h3><div class="list">${m.items.map(it => `<div class="lrow">${ftile(FOODS[it.key] || {cat: "other"})}<span>${esc(it.name)}</span><span class="small muted num">${r0(it.grams)} جم</span></div>`).join("")}</div></div>
     ${m.advice && m.advice.length ? `<div class="note ok">${ic("leaf")}<span><b>خطتك كانت:</b><br>${m.advice.map(esc).join("<br>")}</span></div>` : ""}
     <button class="btn primary block" data-a="read">${ic("drop")} ${rs.length ? "أضف قراءة ثانية" : st.k === "wait" ? `أضف قراءة (الموعد بعد ${minsTxt(st.mins)})` : "أضف قراءة بعد الأكل"}</button>
+    <button class="btn block" data-a="again">${ic("plus")} سجّلها مرة ثانية</button>
     <button class="btn block" data-a="edit">${ic("gear")} عدّل الوجبة</button>
     <button class="btn ghost block" data-a="del" style="color:var(--gE)">${ic("trash")} احذف الوجبة</button>
     <div id="dc" hidden class="note bad"><span><b>تحذف الوجبة وقراءاتها؟</b><br><span class="row" style="margin-top:8px"><button class="btn sm primary" data-a="dy">احذف</button><button class="btn sm" data-a="dn">تراجع</button></span></span></div>`, (sh, close) => {
     $("[data-a=read]", sh).onclick = () => { close(); openReadingSheet(m); };
     $("[data-a=edit]", sh).onclick = () => { close(); editMeal(m); };
+    $("[data-a=again]", sh).onclick = () => { close(); repeatMeal(m); };
     $("[data-a=del]", sh).onclick = () => $("#dc", sh).hidden = false; $("[data-a=dn]", sh).onclick = () => $("#dc", sh).hidden = true;
     $("[data-a=dy]", sh).onclick = async () => { await Store.remove("meals", m.id); for (const r of rs) await Store.remove("readings", r.id); Cloud.safe(() => Cloud.deleteMeal(m));
       S.meals = S.meals.filter(x => x.id !== m.id); S.readings = S.readings.filter(r => r.mealId !== m.id); close(); toast("انحذفت الوجبة"); route(); };
@@ -629,11 +645,17 @@ const OBV = {
   meds: () => ({title: "أدوية السكر", sub: "اختر كل اللي تاخذه.", body: `<div class="stack">${opt("meds", "met", "pill", "ميتفورمين", "جلوكوفاج وغيره", 1)}${opt("meds", "glp", "pill", "GLP-1", "أوزمبك، مونجارو، ساكسندا", 1)}${opt("meds", "sglt", "pill", "SGLT2", "جارديانس، فورسيجا", 1)}${opt("meds", "acar", "pill", "أكاربوز", "جلوكوباي", 1)}${opt("meds", "su", "pill", "سلفونيل يوريا", "أماريل، دايمكرون", 1)}${opt("meds", "ins", "pill", "إنسولين", "أي نوع", 1)}</div>`, valid: () => true, cta: () => Object.values(OB.d.meds || {}).some(Boolean) ? "التالي" : "ما آخذ أدوية سكر"}),
   cond: () => ({title: "حالات تحتاج انتباه", sub: "لسلامتك.", body: `<div class="stack">${opt("cond", "preg", "heart", "حمل", "", 1)}${opt("cond", "ckd", "shield", "مرض كلى متقدم أو غسيل", "", 1)}${opt("cond", "hypo", "drop", "نوبات هبوط متكررة", "دوخة وتعرّق ورجفة", 1)}${opt("cond", "bp", "heart", "ضغط مرتفع", "", 1)}${opt("cond", "chol", "heart", "كوليسترول مرتفع", "", 1)}</div>`, valid: () => true, cta: () => Object.values(OB.d.cond || {}).some(Boolean) ? "التالي" : "ما عندي أي منها"}),
   labs: () => ({title: "آخر تحاليلك", sub: "كل ما كانت أدق، كان التوقع أدق من أول يوم.", body: `
+    ${aiReady() ? `<button class="btn block" id="ob-lab">${ic("camera")} صوّر ورقة التحليل ونعبّيها لك</button><input type="file" id="ob-labf" accept="image/*" hidden><div id="ob-labm"></div>` : ""}
     ${numField("a1c", "التراكمي الأخير (HbA1c)", "%", 3, 15, 0.1)}
     <div class="field"><span class="flabel">متى سويته؟</span><div class="chips wrap">${[["3", "آخر ٣ شهور"], ["6", "آخر ٦ شهور"], ["12", "آخر سنة"], ["13", "أقدم"]].map(([v, l]) => `<button class="chip" data-a1cw="${v}" aria-pressed="${OB.d.a1cWhen === v}">${l}</button>`).join("")}</div></div>
     ${numField("a1cPrev", "التراكمي اللي قبله (اختياري)", "%", 3, 15, 0.1, "نعرف منه هل سكرك طالع أو نازل")}<div id="trend">${trendHTML()}</div>
     ${numField("fbg", "السكر الصائم الأخير (اختياري)", "ملجم/دسل", 40, 400)}`, valid: () => true, cta: () => OB.d.a1c || OB.d.fbg ? "التالي" : "ما أعرفها، تخطَّ",
-    bind: r => $$("[data-a1cw]", r).forEach(b => b.onclick = () => { OB.d.a1cWhen = b.dataset.a1cw; $$("[data-a1cw]", r).forEach(x => x.setAttribute("aria-pressed", x === b)); }),
+    bind: r => { $$("[data-a1cw]", r).forEach(b => b.onclick = () => { OB.d.a1cWhen = b.dataset.a1cw; $$("[data-a1cw]", r).forEach(x => x.setAttribute("aria-pressed", x === b)); });
+      const lb = $("#ob-lab", r); if (lb) { lb.onclick = () => $("#ob-labf", r).click(); $("#ob-labf", r).onchange = async e => { const f = e.target.files[0]; if (!f) return; lb.disabled = true; lb.textContent = "نقرأ التحليل…";
+        try { const d = await readLabPhoto(f); const got = []; if (+d.a1c > 3 && +d.a1c < 16) { OB.d.a1c = +d.a1c; got.push("التراكمي " + d.a1c + "%"); } if (+d.a1c_prev > 3 && +d.a1c_prev < 16) { OB.d.a1cPrev = +d.a1c_prev; got.push("التراكمي السابق"); } if (+d.fbg > 40 && +d.fbg < 500) { OB.d.fbg = r0(+d.fbg); got.push("الصائم " + r0(+d.fbg)); }
+          if (d.date) { const mo = (Date.now() - Date.parse(d.date)) / (30 * 864e5); if (isFinite(mo)) OB.d.a1cWhen = mo <= 3 ? "3" : mo <= 6 ? "6" : mo <= 12 ? "12" : "13"; }
+          renderOnboard(); $("#ob-labm") && ($("#ob-labm").innerHTML = got.length ? `<div class="note ok">${ic("check")}<span>قرأنا: ${got.join("، ")}. تأكد من الأرقام.</span></div>` : `<div class="note">${ic("x")}<span>ما لقينا أرقام واضحة. اكتبها بنفسك.</span></div>`); }
+        catch (er) { lb.disabled = false; lb.textContent = "صوّر ورقة التحليل ونعبّيها لك"; $("#ob-labm", r).innerHTML = `<div class="note bad">${ic("x")}<span>تعذّر: ${aiErrText(er)}</span></div>`; } }; } },
     onNum: r => { $("#trend", r).innerHTML = trendHTML(); }}),
   life: () => ({title: "نشاطك اليومي", body: `<div class="stack">${opt("activity", "low", "sit", "قليل", "أغلب يومي جلوس")}${opt("activity", "mid", "walk", "متوسط", "مشي بعض الأيام")}${opt("activity", "high", "walk", "نشيط", "رياضة ٣ أيام أو أكثر بالأسبوع")}</div>
     ${isDiab() ? `<span class="flabel">أحد أهلك عنده سكري؟</span><div class="chips">${[["yes", "نعم"], ["no", "لا"], ["dk", "ما أدري"]].map(([v, l]) => `<button class="chip" data-fam="${v}" aria-pressed="${OB.d.family === v}">${l}</button>`).join("")}</div>` : ""}`, valid: () => !!OB.d.activity,
@@ -682,10 +704,10 @@ async function obNext() {
 /* ================= MEAL FLOW =================
    photo → items & portions → sugar now → how you'll eat + today → result & plan → save */
 const SC_STAGES = ["photo", "items", "sugar", "context", "result"], SC_TITLES = ["الصورة", "الأكل", "سكرك الحين", "طريقتك", "التوقع"];
-function newScan() { S.scan = {stage: "photo", photo: null, b64: null, items: [], tray: false, share: 1, ctx: {order: "mixed", walk: "0", time: autoTime(), state: {}}, pre: null, q: "", cat: "all", aiNote: "", err: "", on: null, view: "plan"}; }
+function newScan() { S.scan = {stage: "photo", photo: null, b64: null, items: [], tray: false, share: 1, ctx: {order: "mixed", walk: "0", time: autoTime(), oil: "normal", state: {}}, pre: null, q: "", cat: "all", aiNote: "", err: "", on: null, view: "plan"}; }
 function foodItem(F, grams, extra = {}) { return {key: F.id, name: F.ar, data: F, grams, ...extra}; }
-const eff = sc => sc.items.map(it => ({g: it.grams * (sc.tray ? sc.share : 1), data: it.data, it}));
-function aiReady() { const s = S.settings; return (s.provider === "gemini" && !!s.key) || (s.provider === "worker" && !!s.endpoint); }
+const eff = sc => sc.items.map(it => ({g: it.grams * (sc.tray ? sc.share : 1), data: oilAdj(it.data, sc.ctx.oil), it}));
+function aiReady() { const s = S.settings; return (s.provider === "gemini" && !!s.key) || (s.provider === "worker" && !!s.endpoint) || (s.provider !== "none" && !!Cloud.user && Cloud.on); }
 function renderScan() {
   if (!S.scan) newScan();
   const sc = S.scan, gate = gateOf(S.profile || {}), idx = SC_STAGES.indexOf(sc.stage === "analyzing" ? "photo" : sc.stage);
@@ -703,6 +725,7 @@ function renderScan() {
   } else if (sc.stage === "items") {
     body = `<h2>وش في صحنك؟</h2><p class="sub">اختر الأكل، وحدد كم أكلت منه.</p>
       ${sc.aiNote ? `<div class="note ok">${ic("spark")}<span>${esc(sc.aiNote)}</span></div>` : ""}
+      ${logToolsHTML()}${sc.items.length ? "" : quickHTML()}
       <div class="stack">${sc.items.map((it, i) => itemCard(it, i)).join("")}</div>
       ${sc.items.length ? `<button class="check" id="sc-tray" aria-pressed="${sc.tray}"><span class="box">${ic("check")}</span><span><b>الأكل في صينية مشتركة</b><br><span class="small muted">نحسب نصيبك أنت</span></span></button>
       ${sc.tray ? `<div class="chips wrap">${[[0.25, "ربع الصينية"], [0.33, "ثلث"], [0.5, "نص"], [1, "كلها لي"]].map(([v, l]) => `<button class="chip" data-share="${v}" aria-pressed="${sc.share === v}">${l}</button>`).join("")}</div>` : ""}` : ""}
@@ -722,7 +745,8 @@ function renderScan() {
     body = `<h2>كيف بتاكل؟</h2><p class="sub">نفس الوجبة يتغير أثرها حسب طريقتك ويومك.</p>
       <h3>وش بتبدأ فيه؟</h3><div class="ctxopt">${b("order", "carb", "bowl", "الرز أو الخبز أول")}${b("order", "mixed", "swap", "كله مع بعض")}${b("order", "veg", "leaf", "السلطة واللحم أول")}</div>
       <h3>بعد الأكل؟</h3><div class="ctxopt">${b("walk", "0", "sit", "بجلس")}${b("walk", "10", "walk", "بمشي ١٠ د")}${b("walk", "20", "walk", "بمشي ٢٠ د")}</div>
-      <h3>وقت الوجبة</h3><div class="chips wrap">${[["morning", "فطور"], ["noon", "غداء"], ["evening", "عشاء"], ["iftar", "إفطار صائم"]].map(([v, l]) => `<button class="chip" data-t="${v}" aria-pressed="${c.time === v}">${l}</button>`).join("")}</div>
+      <h3>الأكل دسم؟</h3><div class="ctxopt">${b("oil", "light", "leaf", "زيت قليل")}${b("oil", "normal", "bowl", "عادي")}${b("oil", "rich", "drop", "دسم (زيت أو سمن واجد)")}</div>
+      <h3>وقت الوجبة</h3><div class="chips wrap">${TIME_CHIPS().map(([v, l]) => `<button class="chip" data-t="${v}" aria-pressed="${c.time === v}">${l}</button>`).join("")}</div>
       <h3>حالتك اليوم</h3><div class="stack">${[["water", "شربت ماء كافي اليوم", "٦ أكواب أو أكثر"], ["prev", "أكلت شي قبل أقل من ٣ ساعات", "وجبة أو حلا أو عصير"], ["sleep", "نومي أمس ناقص", "أقل من ٦ ساعات"], ["stress", "مريض أو متوتر اليوم", "الزكام والتوتر يرفعون السكر"], ["ex", "تمرنت اليوم", "مشي ٣٠ دقيقة أو أكثر"]].map(([k, t, d]) => `<button class="check" data-s="${k}" aria-pressed="${!!c.state[k]}"><span class="box">${ic("check")}</span><span><b>${t}</b><br><span class="small muted">${d}</span></span></button>`).join("")}</div>`;
     foot = `<button class="btn primary block" id="sc-next">${ic("spark")} شوف التوقع</button>`;
   } else if (sc.stage === "result") {
@@ -792,13 +816,13 @@ function bindScan() {
   $("#sc-skip", R) && ($("#sc-skip", R).onclick = () => { abortAI(); sc.stage = "items"; renderScan(); });
   if (sc.stage === "items") {
     const drawRes = async () => { const q = sc.q.trim(); let list = searchFoods(q, sc.cat, 30), extra = [];
-      if (q.length > 1 && list.length < 5 && /[a-z]/i.test(q)) { await loadUSDA(); extra = searchUSDA(q, 15); }
+      if (q.length > 1 && list.length < 5) { await loadUSDA(); extra = searchAny(q, 15); }
       if (!$("#sc-res", R)) return;
       $("#sc-res", R).innerHTML = [...list, ...extra].map(f => `<button class="res" data-add="${esc(f.id)}">${ftile(f)}<span style="min-width:0"><b>${esc(f.ar)}</b><br><span class="xs muted">${esc(f.unit[0])} · ${r0(f.unit[1])} جم</span></span><span class="add">${ic("plus")}</span></button>`).join("") || `<p class="muted" style="padding:8px">ما لقينا "${esc(q)}". جرّب كلمة ثانية، أو اكتب بالإنجليزي للبحث الموسّع.</p>`;
       const pool = [...list, ...extra];
       $$("[data-add]", R).forEach(b => b.onclick = () => { const F = pool.find(x => x.id === b.dataset.add); sc.items.push(foodItem(F, F.unit[1])); sc.q = ""; renderScan(); toast("انضاف " + F.ar);
         setTimeout(() => { const el = $$(".item", $("#flow")).pop(); el && el.scrollIntoView({block: "center", behavior: "smooth"}); }, 40); }); };
-    drawRes();
+    drawRes(); bindQuick(R); bindLogTools(R);
     $("#sc-q", R).oninput = e => { sc.q = e.target.value; drawRes(); };
     $$("[data-cat]", R).forEach(b => b.onclick = () => { sc.cat = b.dataset.cat; $$("[data-cat]", R).forEach(x => x.setAttribute("aria-pressed", x === b)); drawRes(); });
     $$("[data-rm]", R).forEach(b => b.onclick = () => { sc.items.splice(+b.dataset.rm, 1); renderScan(); });
@@ -859,24 +883,26 @@ Rules:
 - If food is on one large shared tray for several people, set "shared": true and give grams for the WHOLE tray.
 - Rice cooked with meat/chicken and spices maps to the kabsa/mandi/bukhari keys, not plain rice.
 - No matching key: key "other", give name_ar, name_en and per-100g values (carb_per100, fiber_per100, protein_per100, fat_per100, kcal_per100) and glycemic index gi.
+- "oil": how oily/greasy the food looks (visible oil, ghee, fried) as light, normal or rich.
 - confidence 0-1 covers identity and amount. Not food: empty items.
 Reply with ONLY JSON:
-{"summary_ar":"وصف قصير بالعربي","shared":false,"items":[{"key":"kabsa_chicken","name_ar":"كبسة دجاج","grams":350,"confidence":0.8}],"notes_ar":""}`;
+{"summary_ar":"وصف قصير بالعربي","shared":false,"oil":"light|normal|rich","items":[{"key":"kabsa_chicken","name_ar":"كبسة دجاج","grams":350,"confidence":0.8}],"notes_ar":""}`;
 let aiCtl = null;
 function abortAI() { if (aiCtl) { aiCtl.abort(); aiCtl = null; } }
 function parseJSON(t) { try { return JSON.parse(t); } catch (e) { const m = String(t).match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); throw new Error("json"); } }
 async function aiCall(st, parts, signal) {
+  if (st.provider === "cloud") return cloudAI(parts, signal);
   if (st.provider === "gemini") { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(st.model || "gemini-3.8-flash")}:generateContent`, {method: "POST", signal, headers: {"content-type": "application/json", "x-goog-api-key": st.key}, body: JSON.stringify({contents: [{parts}], generationConfig: {responseMimeType: "application/json", temperature: 0.2}})});
     if (!r.ok) throw new Error("http" + r.status); const d = await r.json(); return (d.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join(""); }
   if (st.provider === "worker") { const img = parts.find(p => p.inline_data); const r = await fetch(st.endpoint, {method: "POST", signal, headers: {"content-type": "application/json"}, body: JSON.stringify({image: img ? img.inline_data.data : "", mediaType: "image/jpeg", foods: Object.fromEntries(Object.values(FOODS).map(f => [f.id, f.ar])), ping: !img})});
     if (!r.ok) throw new Error("http" + r.status); return await r.text(); }
   throw new Error("noai");
 }
-async function aiPing(st) { if (st.provider === "none") throw new Error("noai"); if (st.provider === "gemini" && !st.key) throw new Error("nokey"); const t = await aiCall(st, [{text: 'Reply with only this JSON: {"ok":true}'}]); if (st.provider === "gemini") parseJSON(t); }
-function aiErrText(e) { const m = String(e && e.message || e); return m === "nokey" ? "أدخل المفتاح" : m === "noai" ? "اختر طريقة تحليل" : m === "http400" ? "المفتاح أو الموديل غير صحيح" : m === "http403" ? "المفتاح مرفوض" : m === "http404" ? "اسم الموديل غير موجود" : m === "http429" ? "وصلت الحد المجاني، جرّب بعد شوي" : m.startsWith("http") ? "خطأ " + m.slice(4) : "تأكد من الاتصال"; }
+async function aiPing(st) { if (st.provider === "none") throw new Error("noai"); if (st.provider === "cloud") { parseJSON(await cloudAI([{text: 'Reply with only this JSON: {"ok":true}'}])); return; } if (st.provider === "gemini" && !st.key) throw new Error("nokey"); const t = await aiCall(st, [{text: 'Reply with only this JSON: {"ok":true}'}]); if (st.provider === "gemini") parseJSON(t); }
+function aiErrText(e) { const m = String(e && e.message || e); return m === "login" ? "سجّل بإيميلك أولاً" : m === "http503" ? "التحليل في التطبيق غير مفعّل بعد" : m === "http401" ? "سجّل دخول من جديد" : m === "nokey" ? "أدخل المفتاح" : m === "noai" ? "اختر طريقة تحليل" : m === "http400" ? "المفتاح أو الموديل غير صحيح" : m === "http403" ? "المفتاح مرفوض" : m === "http404" ? "اسم الموديل غير موجود" : m === "http429" ? "وصلت الحد المجاني، جرّب بعد شوي" : m.startsWith("http") ? "خطأ " + m.slice(4) : "تأكد من الاتصال"; }
 async function runAI() {
   const sc = S.scan; sc.stage = "analyzing"; sc.err = ""; renderScan(); aiCtl = new AbortController();
-  try { const out = parseJSON(await aiCall(S.settings, [{inline_data: {mime_type: "image/jpeg", data: sc.b64}}, {text: AI_PROMPT()}], aiCtl.signal));
+  try { const out = parseJSON(await aiCall(aiSettings(), [{inline_data: {mime_type: "image/jpeg", data: sc.b64}}, {text: AI_PROMPT()}], aiCtl.signal));
     const items = (Array.isArray(out.items) ? out.items : []).map(x => { const g = Math.max(0, Number(x.grams) || 0), conf = clamp(Number(x.confidence) || 0.5, 0, 1);
       if (FOODS[x.key]) return foodItem(FOODS[x.key], g, {conf});
       const name = String(x.name_ar || x.name_en || "صنف").slice(0, 60), c = +x.carb_per100 || 0, f = +x.fiber_per100 || 0, p = +x.protein_per100 || 0, fat = +x.fat_per100 || 0;
@@ -885,7 +911,7 @@ async function runAI() {
     if (S.scan !== sc) return;
     sc.stage = "items";
     if (!items.length) { sc.aiNote = ""; toast("ما تعرّفنا على أكل واضح. اختر الأصناف بنفسك."); renderScan(); return; }
-    sc.items = items; sc.tray = !!out.shared; sc.share = out.shared ? 0.33 : 1;
+    sc.items = items; if (["light", "normal", "rich"].includes(out.oil)) sc.ctx.oil = out.oil; sc.tray = !!out.shared; sc.share = out.shared ? 0.33 : 1;
     sc.aiNote = [out.summary_ar, out.notes_ar].filter(Boolean).map(String).join(". ") + " راجع الكميات وعدّلها."; renderScan();
   } catch (e) { if (S.scan !== sc || e.name === "AbortError") return; sc.stage = "photo"; sc.err = "تعذّر التحليل: " + aiErrText(e) + ". تقدر تختار الأكل بنفسك."; renderScan(); }
   finally { aiCtl = null; }

@@ -205,6 +205,9 @@ p{margin:0}
 .grab{width:48px;height:5px;border-radius:5px;background:var(--line);align-self:center}
 @keyframes up{from{transform:translateY(40px);opacity:.5}to{transform:none;opacity:1}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
+.mrow{display:flex;flex-direction:column;gap:6px}
+.mbar{height:12px;border-radius:99px;background:var(--soft);overflow:hidden}.mbar i{display:block;height:100%;border-radius:99px}
+@media print{#tabbar,#toast,#sheet-root,.noprint{display:none!important}.flow{position:static!important;overflow:visible!important;inset:auto}body{overflow:visible!important}.app{display:none}.report .card{break-inside:avoid}.flow .flowwrap{max-width:none}}
 @media (prefers-reduced-motion: reduce){.sheet,.sheet-bg,.scanline{animation:none}}
 .toast{pointer-events:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(112px + env(safe-area-inset-bottom,0px));z-index:90;background:var(--ink);color:#fff;padding:12px 18px;border-radius:14px;font-size:.98rem;max-width:min(420px,calc(100% - 32px));text-align:center;box-shadow:var(--shadow)}
 .list{display:flex;flex-direction:column}
@@ -248,6 +251,9 @@ p{margin:0}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+  <symbol id="i-barcode" viewBox="0 0 24 24"><path d="M4 6v12M7 6v12M10.5 6v12M13 6v12M16.5 6v12M20 6v12"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.8"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 20h18M6 16l4-5 4 3 5-7"/></symbol>
   <symbol id="i-bowl" viewBox="0 0 24 24"><path d="M3 11h18a9 9 0 0 1-18 0zM9 7c0-1.6 1.5-1.6 1.5-3.2M13.5 7c0-1.6 1.5-1.6 1.5-3.2"/></symbol>
@@ -294,6 +300,7 @@ p{margin:0}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="foods.js"></script>
+<script src="more.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
