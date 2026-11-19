@@ -193,3 +193,25 @@ const SWAPS = {
   fries:["salad",1,"سلطة بدل البطاطس"], aseeda_white:["aseeda_dates",1,"عصيدة تمر بدل عصيدة الطحين الأبيض"], cornflakes:["oats",4,"شوفان بدل الكورن فليكس"],
   potato:["veg_cooked",1,"خضار مطبوخة بدل البطاطس"], watermelon:["apple",0.6,"تفاحة بدل الحبحب"]
 };
+/* Food photos: Wikimedia Commons file titles (CC0 / CC BY / CC BY-SA). Shown via Special:FilePath thumbnails. */
+const IMG_TITLES = {
+  kabsa_chicken:"Chicken Kabsa.jpg", kabsa_lamb:"Kabsa.jpg", kabsa_camel:"Kabsa.jpg", madini_meat:"Kabsa.jpg", madini_chicken:"Chicken Kabsa.jpg",
+  mandi:"Chicken Mandi Rice مندي دجاج.JPG", bukhari_meat:"Bukhari Rice ارز بخاري بالدجاج.JPG", bukhari_chicken:"Bukhari Rice ارز بخاري بالدجاج.JPG",
+  saleeg_chicken:"The Hijazi Saleeg.jpg", saleeg_meat:"The Hijazi Saleeg.jpg", mansaf:"Mansaf 1.jpg", sayadiah:"Fish Sayadieh.jpg",
+  rice_white:"A bowl of rice.jpg", rice_basmati:"Basmati rice in pot.jpg", rice_brown:"Par cooked brown rice - stonesoup cropped.jpg",
+  fried_fish:"Fried Fish 2.jpg", khubz_arabi:"Homemade hummus and pita 03.jpg", samoli:"Iraqi Sammon Bread 04.jpg", brown_bread:"Vegan no-knead whole wheat bread loaf, September 2010.jpg",
+  mantu:"Manti (dumpling) In Istanbul.jpg", fatayer:"Fatayer.jpg", sambosa:"Samosa 4.jpg", margoug:"Markouk - Bread on Saje.jpg",
+  tharid:"Tharid..JPG", harees:"Al fanar harees (7797136886).jpg", balaleet:"Balaleet 2019.jpg", couscous_meat:"Tunisian couscous with dried meat and braod bean.JPG",
+  haneeth:"Overhead view, haneeth, Marib restaurant, Springfield, Virginia.jpg", lamb:"-2020-20-21 Cooked double lamb chops, Trimingham, Norfolk.JPG", shawaya:"Kebab Gerashi.jpg",
+  lentil_soup:"Homemade Lentil Soup - Lavash 2025-02-10.jpg", okra:"Bamia-Ocras tomate (cropped).JPG", foul:"Ful medames (arabic meal).jpg", hummus:"Homemade hummus and pita 03.jpg",
+  falafel:"Falafel 1.JPG", shakshuka:"Shakshuka by Calliopejen1.jpg", oats:"Banana blueberry oatmeal.jpg", cornflakes:"Corn flakes in a bowl.jpg", honey:"Three French monofloral honey jars.jpg",
+  labneh:"Labneh (5196911587).jpg", yogurt:"Yogurt fruit bowl.jpg", laban:"Naneli ayran - Dara.jpg", luqaimat:"Lokma Galata Bridge.JPG",
+  kunafa_cream:"Knafeh From Yaffa Knafeh.jpg", kunafa_cheese:"Knafeh From Yaffa Knafeh.jpg", basbousa:"Basboosa.jpg", maamoul:"Mamoul biscotti libanesi.jpg", kleja:"Kleeja 1.JPG",
+  masoub:"Yemeni Masoob.jpg", aseeda_dates:"Eating Asida.JPG", aseeda_wheat:"Eating Asida.JPG", cake:"Piece of chocolate cake on a white plate decorated with chocolate sauce.jpg", chocolate:"Milkchocolate with almonds, Aachen, Germany.jpg",
+  dates_sukkari:"Sukkary date.jpg", dates_ajwa:"Ajwa dates.JPG", dates_barhi:"Pile of Barhi Dates at Barkin Dogo Market, Kaduna North.jpg", dates_khalas:"Sukkary date.jpg", dates_sagai:"Sukkary date.jpg", dates_shaqra:"Sukkary date.jpg", dates_sellaj:"Sukkary date.jpg", dates_maktoumi:"Sukkary date.jpg",
+  banana:"Cavendish banana from Maracaibo.jpg", apple:"Red Apple.jpg", orange:"Oranges - whole-halved-segment.jpg", watermelon:"Watermelon slice, May 2024.jpg", grapes:"Wine grapes03.jpg", mango:"Mangos - single and halved.jpg",
+  qahwa:"A dallah a traditional Arabic coffee pot with cups and coffee beans.jpg", tea_sugar:"Glass of tea 05119.jpg", karak:"Chai in the mountains.jpg", juice_orange:"Orange juice 1 edit1.jpg", vimto:"Vimto No Added Sugar 1.jpg",
+  shawarma_sand:"Shawarma-sandwich-01.jpg", shawarma_plate:"Plate Shawarma - variant.jpg", broast:"Fried-Chicken-Set.jpg", pizza:"White slice and supreme slice.jpg", falafel_sand:"Falafel Sandwich at Utsunomiya.jpg",
+  salad:"Salad platter.jpg", fattoush:"Fattoush mixed-salad.jpg", tabbouleh:"Flickr - cyclonebill - Tabbouleh.jpg", veg_cooked:"Vegetables cooked in the kanoun.jpg"
+};
+const imgURL = (id, w = 240) => IMG_TITLES[id] ? "https://commons.wikimedia.org/wiki/Special:FilePath/" + encodeURIComponent(IMG_TITLES[id]) + "?width=" + w : null;
